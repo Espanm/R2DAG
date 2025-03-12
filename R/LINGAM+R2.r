@@ -1,6 +1,6 @@
-library(pcalg)
-library(relaimpo)
-library(igraph)
+#library(pcalg)
+#library(relaimpo)
+#library(igraph)
 
 dag_plot <- function(table, 
                         name="DAG", 
