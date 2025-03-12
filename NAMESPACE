@@ -1,1 +1,7 @@
+# Import required packages
+import(pcalg)
+import(igraph)
+import(relaimpo)
+
+# Export all functions whose names start with a letter
 exportPattern("^[[:alpha:]]+")
