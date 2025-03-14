@@ -157,6 +157,7 @@ R2_dag <- function(data, method) {
   result$lingam <- lingam_model
 
   return(result)
+}
 
 
 
