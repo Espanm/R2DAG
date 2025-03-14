@@ -1,7 +1,7 @@
 Package: R2DAG
 Type: Package
 Title: Used codes for the R2 connectedness article
-Version: 0.1.0
+Version: 0.1.1
 Authors@R: person("Marton", "Espan", email = "espan.marci@email.com", role = c("aut", "cre"))
 Description: A package for R2 connectedness analysis.
 License: MIT
