@@ -9,7 +9,7 @@ data2amat <- function(data){
   # Convert to binary adjacency matrix
   amat <- ifelse(coefs != 0, 1, 0)
 
-  res < c()
+  res <- c()
   res$lingam <- lingam_model
   res$amat <- amat
 
