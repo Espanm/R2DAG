@@ -32,7 +32,7 @@ R2_network <- function(data, method, directed=TRUE) {
     # Identify parent nodes (nodes with paths leading to i)
       selected_cols <- paths[[colnames(data)[i]]]
     } else {
-      selected_cols <-  data[, -i, drop=FALSE]
+      selected_cols <-  colnames(data[, -i, drop=FALSE])
     }
 
 
