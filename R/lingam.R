@@ -1,6 +1,6 @@
 #library(pcalg)
 
-data2amat <- function(lingam_model){
+data2amat <- function(data){
 
   # Learn the Bayesian network structure using LiNGAM
   lingam_model <- lingam(data, verbose=FALSE)
