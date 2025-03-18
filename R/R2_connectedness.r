@@ -4,7 +4,8 @@
 
 R2_network <- function(data, method, directed=TRUE) {
 
-  amat <- data2amat(data)
+  lingam_amat <- data2amat(data)
+  amat <- lingam_amat$amat
 
   # Assign column names to adjacency matrix
   colnames(amat) <- rownames(amat) <- colnames(data)
@@ -72,7 +73,7 @@ R2_network <- function(data, method, directed=TRUE) {
   result$from <- colSums(result_matrix)
   result$to <- rowSums(result_matrix)
   result$tci <- mean(tci)
-  result$lingam <- lingam_model
+  result$lingam <- lingam_amat$lingam
 
   return(result)
 }
