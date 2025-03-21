@@ -4,7 +4,7 @@
 
 R2_network <- function(data, method, directed=TRUE, amat=FALSE) {
 
-  if (amat==FALSE || directed==TRUE){
+  if (amat==FALSE | directed==TRUE){
     lingam_amat <- data2amat(data)
     amat <- lingam_amat$amat
   }
