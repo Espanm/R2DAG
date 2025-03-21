@@ -2,10 +2,12 @@
 #library(relaimpo)
 #source("lingam.r")
 
-R2_network <- function(data, method, directed=TRUE) {
+R2_network <- function(data, method, directed=TRUE, amat=FALSE) {
 
-  lingam_amat <- data2amat(data)
-  amat <- lingam_amat$amat
+  if (amat==FALSE || directed==TRUE){
+    lingam_amat <- data2amat(data)
+    amat <- lingam_amat$amat
+  }
 
   # Assign column names to adjacency matrix
   colnames(amat) <- rownames(amat) <- colnames(data)
