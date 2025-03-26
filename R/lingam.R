@@ -5,7 +5,7 @@ data2amat <- function(data){
   # Learn the Bayesian network structure using LiNGAM
   lingam_model <- lingam(data, verbose=FALSE)
   # Extract adjacency matrix
-  coefs <- t(as.matrix(lingam_model$Bpruned))
+  coefs <- as.matrix(lingam_model$Bpruned)
   # Convert to binary adjacency matrix
   amat <- ifelse(coefs != 0, 1, 0)
 
@@ -17,24 +17,25 @@ data2amat <- function(data){
 }
 
 compute_reachability <- function(amat) {
-    # Ensure adjacency matrix is logical (TRUE/FALSE)
-    reachability <- amat > 0
+  # Ensure adjacency matrix is logical (TRUE/FALSE)
+  reachability <- amat > 0
 
-    n <- nrow(amat)
-    node_names <- colnames(amat)
+  n <- nrow(amat)
+  node_names <- colnames(amat)
 
-    # Compute transitive closure using matrix multiplication for efficiency
-    for (k in seq_len(n)) {
-      reachability <- reachability | (reachability %*% reachability > 0)
-    }
-
-    # Convert reachability matrix into a dictionary with column names
-    reach_dict <- setNames(vector("list", n), node_names)
-
-    for (i in seq_len(n)) {
-      reachable_nodes <- which(reachability[, i])  # Get indices of reachable nodes
-      reach_dict[[node_names[i]]] <- node_names[reachable_nodes]  # Map indices to column names
-    }
-
-    return(reach_dict)
+  # Compute transitive closure
+  for (k in seq_len(n)) {
+    reachability <- reachability | (reachability %*% reachability > 0)
   }
+
+  # Initialize inverse reachability dictionary
+  reach_dict <- setNames(vector("list", n), node_names)
+
+  for (j in seq_len(n)) {
+    # For node j, find all i such that i can reach j
+    reachable_from <- which(reachability[j, ])
+    reach_dict[[node_names[j]]] <- node_names[reachable_from]
+  }
+
+  return(reach_dict)
+}
