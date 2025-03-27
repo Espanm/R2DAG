@@ -77,9 +77,10 @@ R2_network <- function(data, method="genizi", directed=TRUE, amat=FALSE) {
   result$table <- result_matrix
   result$from <- colSums(result_matrix)
   result$to <- rowSums(result_matrix)
-  if (directed==TRUE){result$tci <- mean(tci) * (p-s) / p}
+  if (directed==TRUE){
+  result$tci <- mean(tci) * (p-s) / p
+  result$lingam <- lingam_amat$lingam}
   else {result$tci <- mean(tci)}
-  result$lingam <- lingam_amat$lingam
 
   return(result)
 }
