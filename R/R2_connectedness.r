@@ -2,9 +2,9 @@
 #library(relaimpo)
 #source("lingam.r")
 
-R2_network <- function(data, method, directed=TRUE, amat=FALSE) {
+R2_network <- function(data, method="genizi", directed=TRUE, amat=FALSE) {
 
-  if ((is.logical(amat) && !amat) || directed) {
+  if ((is.logical(amat) && !amat) && directed) {
     lingam_amat <- data2amat(data)
     amat <- lingam_amat$amat
   }
@@ -14,6 +14,7 @@ R2_network <- function(data, method, directed=TRUE, amat=FALSE) {
 
   # Get the number of variables
   p <- ncol(data)
+  s <- count_isolated_nodes(amat)
 
   # Initialize result matrix
   result_matrix <- matrix(0, nrow = p, ncol = p)
@@ -74,7 +75,8 @@ R2_network <- function(data, method, directed=TRUE, amat=FALSE) {
   result$table <- result_matrix
   result$from <- colSums(result_matrix)
   result$to <- rowSums(result_matrix)
-  result$tci <- mean(tci)
+  if (directed==TRUE){result$tci <- mean(tci) * (p-s) / p}
+  else {result$tci <- mean(tci)}
   result$lingam <- lingam_amat$lingam
 
   return(result)

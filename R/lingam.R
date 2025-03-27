@@ -39,3 +39,18 @@ compute_reachability <- function(amat) {
 
   return(reach_dict)
 }
+
+count_isolated_nodes <- function(adj_mat) {
+  # Check if it's a square matrix
+  if (!is.matrix(adj_mat) || nrow(adj_mat) != ncol(adj_mat)) {
+    stop("Input must be a square adjacency matrix.")
+  }
+
+  # An isolated node has no incoming and no outgoing edges
+  row_sums <- rowSums(adj_mat)
+  col_sums <- colSums(adj_mat)
+
+  isolated <- (row_sums + col_sums) == 0
+
+  return(sum(isolated))
+}
