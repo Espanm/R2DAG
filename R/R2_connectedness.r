@@ -9,12 +9,14 @@ R2_network <- function(data, method="genizi", directed=TRUE, amat=FALSE) {
     amat <- lingam_amat$amat
   }
 
+  if (!is.logical(amat)){
   # Assign column names to adjacency matrix
   colnames(amat) <- rownames(amat) <- colnames(data)
+  s <- count_isolated_nodes(amat)
+  }
 
   # Get the number of variables
   p <- ncol(data)
-  s <- count_isolated_nodes(amat)
 
   # Initialize result matrix
   result_matrix <- matrix(0, nrow = p, ncol = p)
