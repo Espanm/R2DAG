@@ -83,7 +83,9 @@ R2_network <- function(data, method="genizi", directed=TRUE, amat=FALSE) {
 }
 
 
-rolling_network <- function(data, block_size, method="genizi", directed=TRUE){
+rolling_network <- function(data, block_size, method="genizi", directed=TRUE, dynamic_structure=TRUE){
+
+  if (dynamic_structure==FALSE){
 
   lingam_model <- lingam(data, verbose=FALSE)
   # Extract adjacency matrix
@@ -108,10 +110,30 @@ rolling_network <- function(data, block_size, method="genizi", directed=TRUE){
     from_df <- rbind(from_df, as.data.frame(as.list(network$from)))
 
   }
+  }
+  else{
+    n <- nrow(data)
+    p <- ncol(data)
+
+    tci_vector <- c()
+    to_df <- data.frame(matrix(ncol = p, nrow = 0))
+    colnames(to_df) <- colnames(data)
+    from_df <- data.frame(matrix(ncol = p, nrow = 0))
+    colnames(from_df) <- colnames(data)
+
+    for (i in 1:(n-block_size)){
+      rolling_data <- data[i:(i+block_size),]
+      network <- R2_network(rolling_data, method=method, directed=directed, amat=FALSE)
+      tci_vector <- c(network$tci, tci_vector)
+      to_df <- rbind(to_df, as.data.frame(as.list(network$to)))
+      from_df <- rbind(from_df, as.data.frame(as.list(network$from)))
+
+    }
+  }
 
   result <- c()
 
-  result$tci_vetor <- tci_vector
+  result$tci_vector <- tci_vector
   result$to_df <- to_df
   result$from_df <- from_df
   return(result)
