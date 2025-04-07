@@ -68,8 +68,11 @@ calculate_irf <- function(var_model, n.ahead, ortho = FALSE, shock = "None") {
   # Sokk mátrix: ortogonalizált (Cholesky) vagy identitás
   Sigma_u <- summary(var_model)$covres
 
-  if (shock=="None"){shock_mat <- if (ortho) chol(Sigma_u) else diag(K)}
-  else{shock_mat <- shock}
+  if (is.character(shock) && shock == "None") {
+    shock_mat <- if (ortho) chol(Sigma_u) else diag(K)
+  } else {
+    shock_mat <- shock
+  }
 
   # IRF tömb inicializálása: [válasz, sokk, idő]
   IRF <- array(0, dim = c(K, K, n.ahead + 1))
