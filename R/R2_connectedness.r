@@ -23,7 +23,7 @@ R2_network <- function(data, method="genizi", directed=TRUE, amat=FALSE) {
   colnames(result_matrix) <- rownames(result_matrix) <- colnames(data)
 
   # Initialize tci vector
-  tci <- c()
+  tci <- c(0)
 
   if (directed==TRUE){
     # Compute reachability paths
