@@ -1,32 +1,52 @@
-gen_var <- function(n, list_A, sigma) {
-
-  k <- nrow(list_A[[1]])    # Number of variables (k)
-  p <- length(list_A)       # Number of lags (p)
-
-  # Cholesky decomposition to generate correlated innovations
-  chol_sigma <- chol(sigma)
-  innovations <- matrix(rnorm(n * k), nrow = n) %*% chol_sigma
-
-  # Initialize the time series matrix
-  y <- matrix(NA, nrow = n, ncol = k)
-
-  # Initial values: random for the first 'p' rows
-  y[1:p, ] <- matrix(rnorm(p * k), nrow = p)
-
-  # Simulate the VAR process
-  for (i in (p+1):n) {
-    y[i, ] <- 0  # Initialize the row
-    for (j in 1:p) {
-      y[i, ] <- y[i, ] + list_A[[j]] %*% y[i-j, ]
-    }
-    y[i, ] <- y[i, ] + innovations[i, ]  # Add the innovations (errors)
+gen_svar <- function(n, A0 = NULL, list_A = list(), df = 10, burnin = 100) {
+  # --- Determine system dimension (k)
+  if (length(list_A) > 0) {
+    k <- nrow(list_A[[1]])
+  } else if (!is.null(A0)) {
+    k <- nrow(A0)
+  } else {
+    k <- 1  # fallback
   }
 
-  # Convert the result into a time series object
-  y_ts <- ts(y)
+  # --- Default A0 if missing
+  if (is.null(A0)) {
+    A0 <- diag(k)
+  }
 
-  return(y_ts)
+  p <- length(list_A)
+  A0_inv <- solve(A0)
+
+  total_n <- n + burnin  # simulate extra steps
+
+  # --- Generate structural shocks ε_t
+  if (is.infinite(df)) {
+    epsilon <- matrix(rnorm(total_n * k), nrow = total_n)
+  } else {
+    t_raw <- matrix(rt(total_n * k, df = df), nrow = total_n)
+    scale <- sqrt(df / (df - 2))  # standardize to variance 1
+    epsilon <- t_raw / scale
+  }
+
+  # --- Initialize y
+  y <- matrix(NA, nrow = total_n, ncol = k)
+  y[1:max(1, p), ] <- matrix(rnorm(max(1, p) * k), nrow = max(1, p))
+
+  # --- Simulate the SVAR process
+  for (i in (p + 1):total_n) {
+    y_sum <- rep(0, k)
+    if (p > 0) {
+      for (j in 1:p) {
+        y_sum <- y_sum + list_A[[j]] %*% y[i - j, ]
+      }
+    }
+    y[i, ] <- A0_inv %*% (y_sum + epsilon[i, ])
+  }
+
+  # Return only post-burnin sample as time series
+  return(ts(y[(burnin + 1):total_n, ]))
 }
+
+
 
 extract_lag_matrices <- function(var_model) {
   K <- length(var_model$varresult)       # változók száma
@@ -55,6 +75,28 @@ extract_lag_matrices <- function(var_model) {
   names(A_list) <- paste0("A", 1:p)
 
   return(A_list)
+}
+
+construct_svar_template <- function(adj) {
+  k <- nrow(adj)
+
+  # Step 1: Create graph and get causal (topological) ordering
+  g <- graph_from_adjacency_matrix(adj, mode = "directed")
+  causal_order <- as.numeric(topological.sort(g, mode = "in"))
+
+  # Step 2: Construct lower-triangular matrix in causal order
+  A_causal <- matrix(NA, k, k)
+  diag(A_causal) <- 1
+  A_causal[upper.tri(A_causal)] <- 0  # set upper triangle to 0
+
+  # Step 3: Permute back to original order
+  # Get inverse permutation
+  inv_order <- order(causal_order)
+
+  # Apply permutation to rows and columns
+  A_original <- A_causal[inv_order, inv_order]
+
+  return(A_original)
 }
 
 calculate_irf <- function(var_model, n.ahead, ortho = FALSE, shock = "None") {

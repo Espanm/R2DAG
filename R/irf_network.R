@@ -30,12 +30,7 @@ irf_network <- function(var_model, n.ahead, cumsum=TRUE, amat=FALSE){
 
 
   # Kezdetben: 1-ek a diagonálban, 0 mindenhol máshol
-  Amat <- diag(1, p)
-
-  # Azokon a helyeken, ahol paths == 1, tegyünk NA-t
-  Amat[paths_matrix == 1] <- NA
-  # A diagonált visszaállítjuk 1-re (ha véletlenül felül lett írva)
-  diag(Amat) <- 1
+  Amat <- construct_svar_template(amat)
 
   svar_model <- SVAR(x = var_model, estmethod = "scoring", Amat = Amat, Bmat = NULL, max.iter = 1000, maxls = 1000, conv.crit = 1.0e-8)
   A_inv <- solve(svar_model[1]$A)
