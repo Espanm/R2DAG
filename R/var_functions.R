@@ -136,7 +136,7 @@ calculate_irf <- function(var_model, n.ahead, ortho = FALSE, shock = "None") {
     horizon = 0:n.ahead
   )
 
-  return(IRF)
+  return(abs(IRF))
 }
 
 cumsum_irf <- function(IRF, h) {
@@ -145,10 +145,20 @@ cumsum_irf <- function(IRF, h) {
     stop("h is larger than the number of horizons in IRF.")
   }
 
-  # Összegzés k = 1..h (azaz IRF[,,2] .. IRF[,,h+1])
-  A <- apply(IRF[,,2:(h + 1), drop = FALSE], c(1, 2), sum)
+  # Méretek kinyerése
+  n_row <- dim(IRF)[1]  # válaszadó változók száma
+  n_col <- dim(IRF)[2]  # sokkoló változók száma
+
+  # Üres mátrix inicializálása az eredményhez
+  A <- matrix(0, nrow = n_row, ncol = n_col)
+
+  # Összegzés ciklussal: IRF[,,2]..IRF[,,h+1]
+  for (t in 2:(h + 1)) {
+    A <- A + IRF[,,t]
+  }
 
   return(A)
 }
+
 
 
