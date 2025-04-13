@@ -46,8 +46,6 @@ gen_svar <- function(n, A0 = NULL, list_A = list(), df = 10, burnin = 100) {
   return(ts(y[(burnin + 1):total_n, ]))
 }
 
-
-
 extract_lag_matrices <- function(var_model) {
   K <- length(var_model$varresult)       # változók száma
   p <- var_model$p                       # késleltetések száma
@@ -68,35 +66,13 @@ extract_lag_matrices <- function(var_model) {
       coef_names <- paste0(varnames, ".", "l", j)
       A_j[, eq] <- coef_vecs[[eq]][coef_names]
     }
-    A_list[[j]] <- A_j
+    A_list[[j]] <- t(A_j)
   }
 
   # Elnevezzük őket
   names(A_list) <- paste0("A", 1:p)
 
   return(A_list)
-}
-
-construct_svar_template <- function(adj) {
-  k <- nrow(adj)
-
-  # Step 1: Create graph and get causal (topological) ordering
-  g <- graph_from_adjacency_matrix(adj, mode = "directed")
-  causal_order <- as.numeric(topological.sort(g, mode = "in"))
-
-  # Step 2: Construct lower-triangular matrix in causal order
-  A_causal <- matrix(NA, k, k)
-  diag(A_causal) <- 1
-  A_causal[upper.tri(A_causal)] <- 0  # set upper triangle to 0
-
-  # Step 3: Permute back to original order
-  # Get inverse permutation
-  inv_order <- order(causal_order)
-
-  # Apply permutation to rows and columns
-  A_original <- A_causal[inv_order, inv_order]
-
-  return(A_original)
 }
 
 calculate_irf <- function(var_model, n.ahead, ortho = FALSE, shock = "None") {
@@ -137,6 +113,30 @@ calculate_irf <- function(var_model, n.ahead, ortho = FALSE, shock = "None") {
   )
 
   return(abs(IRF))
+}
+
+library(igraph)
+
+construct_svar_template <- function(adj) {
+  k <- nrow(adj)
+
+  # Step 1: Create graph and get causal (topological) ordering
+  g <- graph_from_adjacency_matrix(adj, mode = "directed")
+  causal_order <- as.numeric(topological.sort(g, mode = "in"))
+
+  # Step 2: Construct lower-triangular matrix in causal order
+  A_causal <- matrix(NA, k, k)
+  diag(A_causal) <- 1
+  A_causal[upper.tri(A_causal)] <- 0  # set upper triangle to 0
+
+  # Step 3: Permute back to original order
+  # Get inverse permutation
+  inv_order <- order(causal_order)
+
+  # Apply permutation to rows and columns
+  A_original <- A_causal[inv_order, inv_order]
+
+  return(A_original)
 }
 
 cumsum_irf <- function(IRF, h) {
