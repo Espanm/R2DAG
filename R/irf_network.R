@@ -40,17 +40,7 @@ irf_network <- function(var_model, n.ahead, cumsum=TRUE, amat=FALSE){
   if (cumsum){irf_matrix <- cumsum_irf(IRF, n.ahead)}
   else {irf_matrix <- IRF[,,(n.ahead+1)]}
 
-  # Initialize result matrix
-  result_matrix <- matrix(0, nrow = p, ncol = p)
-  colnames(result_matrix) <- rownames(result_matrix) <- colnames(data)
+  colnames(irf_matrix) <- rownames(irf_matrix) <- colnames(data)
 
-  # Feltétel: megtartjuk, ahol B[i, j] == i vagy i == j
-  for (i in 1:p) {
-    for (j in 1:p) {
-      if (paths_matrix[i, j] == 1 || i == j) {
-        result_matrix[i, j] <- irf_matrix[i, j]
-      }
-    }
-  }
-  return(result_matrix)
+  return(irf_matrix)
 }
