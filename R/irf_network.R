@@ -42,5 +42,26 @@ irf_network <- function(var_model, n.ahead, cumsum=TRUE, amat=FALSE){
 
   colnames(irf_matrix) <- rownames(irf_matrix) <- colnames(data)
 
-  return(irf_matrix)
+  result <- list()
+
+  result$table <- irf_matrix
+  result$direct <- calculate_irf(var_model, 1, ortho = FALSE, shock = A_inv)
+  result$indirect <- result$table - result$direct
+  result$tci <- off_diag_percent(irf_matrix)
+  result$from <- colSums(irf_matrix)
+  result$to <- rowSums(irf_matrix)
+
+  return(result)
+}
+
+off_diag_percent <- function(mat) {
+  if (!is.matrix(mat)) stop("Input must be a matrix.")
+
+  total_sum <- sum(mat)
+  diag_sum <- sum(diag(mat))
+
+  if (total_sum == 0) return(NA)  # avoid division by zero
+
+  percent <- (diag_sum / total_sum) * 100
+  return(1-percent)
 }
