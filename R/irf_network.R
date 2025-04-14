@@ -54,7 +54,7 @@ irf_network <- function(var_model, n.ahead, cumsum=TRUE, amat=FALSE){
   return(result)
 }
 
-off_diag_percent <- function(mat) {
+off_diag_percentage <- function(mat) {
   if (!is.matrix(mat)) stop("Input must be a matrix.")
 
   total_sum <- sum(mat)
@@ -62,6 +62,6 @@ off_diag_percent <- function(mat) {
 
   if (total_sum == 0) return(NA)  # avoid division by zero
 
-  percent <- (diag_sum / total_sum) * 100
-  return(1-percent)
+  percentage <- 1 - (diag_sum / total_sum)
+  return(percentage)
 }
