@@ -95,15 +95,17 @@ calculate_irf <- function(var_model, n.ahead, ortho = FALSE, shock = "None") {
 
   # IRF tömb inicializálása: [válasz, sokk, idő]
   IRF <- array(0, dim = c(K, K, n.ahead + 1))
-  IRF[, , 1] <- shock_mat  # kezdő sokkhatás
+  IRF[, , 1] <- shock_mat  # kezdő sokkhatás (t = 0)
 
-  # Rekurzív IRF számítás
-  for (h in 1:n.ahead) {
-    IRF_h <- matrix(0, nrow = K, ncol = K)
-    for (j in 1:min(h, p)) {
-      IRF_h <- IRF_h + A_list[[j]] %*% IRF[, , h - j + 1]
+  # Csak akkor fut a ciklus, ha n.ahead > 0
+  if (n.ahead > 0) {
+    for (h in 1:n.ahead) {
+      IRF_h <- matrix(0, nrow = K, ncol = K)
+      for (j in 1:min(h, p)) {
+        IRF_h <- IRF_h + A_list[[j]] %*% IRF[, , h - j + 1]
+      }
+      IRF[, , h + 1] <- IRF_h
     }
-    IRF[, , h + 1] <- IRF_h
   }
 
   # Dimenziónevek
@@ -116,7 +118,6 @@ calculate_irf <- function(var_model, n.ahead, ortho = FALSE, shock = "None") {
   return(abs(IRF))
 }
 
-library(igraph)
 
 construct_svar_template <- function(adj) {
   k <- nrow(adj)
