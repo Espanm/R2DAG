@@ -29,7 +29,7 @@ gen_svar <- function(n, A0 = NULL, list_A = list(), df = 10, burnin = 100) {
 
   # --- Initialize y
   y <- matrix(NA, nrow = total_n, ncol = k)
-  colnames(y) <- paste0("X", seq_len(ncol(y)))
+  colnames(y) <- paste0("Y", seq_len(ncol(y)))
   y[1:max(1, p), ] <- matrix(rnorm(max(1, p) * k), nrow = max(1, p))
 
   # --- Simulate the SVAR process
