@@ -29,6 +29,7 @@ gen_svar <- function(n, A0 = NULL, list_A = list(), df = 10, burnin = 100) {
 
   # --- Initialize y
   y <- matrix(NA, nrow = total_n, ncol = k)
+  colnames(y) <- paste0("X", seq_len(ncol(y)))
   y[1:max(1, p), ] <- matrix(rnorm(max(1, p) * k), nrow = max(1, p))
 
   # --- Simulate the SVAR process
@@ -153,7 +154,7 @@ cumsum_irf <- function(IRF, h) {
   A <- matrix(0, nrow = n_row, ncol = n_col)
 
   # Összegzés ciklussal: IRF[,,2]..IRF[,,h+1]
-  for (t in 2:(h + 1)) {
+  for (t in 1:(h + 1)) {
     A <- A + IRF[,,t]
   }
 
