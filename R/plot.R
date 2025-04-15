@@ -1,7 +1,7 @@
 #library(igraph)
 
 dag_plot <- function(table,
-                     name="DAG",
+                     name="DAG", # name of the graph
                      vertex_label_size=1,  # Vertex label size
                      arrow_size=1,  # Arrow size for directed edges
                      edge_label_size = 2,  # Edge label size
@@ -59,3 +59,73 @@ dag_plot <- function(table,
     main = name
   )
 }
+
+plot_irf_graph <- function(table,
+                           name = "DAG",
+                           vertex_label_size = 1,
+                           arrow_size = 1,
+                           edge_label_size = 2,
+                           label_round = 3) {
+  if (!is.matrix(table)) stop("Input must be a matrix.")
+  if (nrow(table) != ncol(table)) stop("Matrix must be square.")
+  if (is.null(colnames(table))) colnames(table) <- rownames(table) <- paste0("Y", seq_len(ncol(table)))
+
+  # Nettó különbségek számítása
+  net_diff <- table - t(table)
+  diag(net_diff) <- 0
+
+  # Él lista: csak egyszer, pozitív irányban, abs súllyal
+  edge_list <- list()
+  for (i in 1:(nrow(net_diff) - 1)) {
+    for (j in (i + 1):ncol(net_diff)) {
+      diff_ij <- net_diff[i, j]
+      if (diff_ij > 0) {
+        edge_list[[length(edge_list) + 1]] <- data.frame(
+          from = rownames(net_diff)[i],
+          to   = colnames(net_diff)[j],
+          weight = diff_ij,
+          label = round(diff_ij, label_round)
+        )
+      } else if (diff_ij < 0) {
+        edge_list[[length(edge_list) + 1]] <- data.frame(
+          from = rownames(net_diff)[j],
+          to   = colnames(net_diff)[i],
+          weight = abs(diff_ij),
+          label = round(abs(diff_ij), label_round)
+        )
+      }
+    }
+  }
+
+  if (length(edge_list) == 0) {
+    message("No nonzero net differences to plot.")
+    return(NULL)
+  }
+
+  edges_df <- do.call(rbind, edge_list)
+
+  # Gráf létrehozása
+  g <- graph_from_data_frame(edges_df, directed = TRUE)
+
+  # Attribútumok
+  E(g)$width <- E(g)$weight * 2
+  E(g)$color <- "gray50"
+  E(g)$label <- edges_df$label
+  E(g)$label.color <- "blue"
+  E(g)$arrow.size <- arrow_size
+
+  # Körkörös elrendezés
+  layout <- layout_in_circle(g)
+
+  # Plot
+  plot(g,
+       layout = layout,
+       vertex.size = 30,
+       vertex.label.cex = vertex_label_size,
+       edge.label.cex = edge_label_size,
+       edge.arrow.size = E(g)$arrow.size,
+       edge.color = E(g)$color,
+       edge.label.color = E(g)$label.color,
+       main = name)
+}
+

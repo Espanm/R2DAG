@@ -33,7 +33,8 @@ irf_network <- function(var_model, n.ahead, cumsum=TRUE, amat=FALSE){
   Amat <- construct_svar_template(amat)
 
   svar_model <- SVAR(x = var_model, estmethod = "scoring", Amat = Amat, Bmat = NULL, max.iter = 1000, maxls = 1000, conv.crit = 1.0e-8)
-  A_inv <- solve(svar_model[1]$A)
+  A <- svar_model[1]$A
+  A_inv <- solve(A)
 
   IRF <- calculate_irf(var_model, n.ahead, ortho = FALSE, shock = A_inv)
 
@@ -48,6 +49,19 @@ irf_network <- function(var_model, n.ahead, cumsum=TRUE, amat=FALSE){
   result$tci <- off_diag_percentage(irf_matrix)
   result$from <- colSums(irf_matrix)
   result$to <- rowSums(irf_matrix)
+  result$contamperanous$total <- abs(A_inv)
+  result$contamperanous$direct <- abs(A)
+  result$contamperanous$undirect <- abs(A_inv) - abs(A)
+  if (n.ahead > 0){
+    result$lagged$total <- irf_matrix - IRF[,,1]
+    result$lagged$direct  <- IRF[,,2]
+    result$lagged$undirect <- irf_matrix - IRF[,,2] - IRF[,,1]
+  }
+  svar_params <- list()
+  svar_params$A0 <- A
+  svar_params$var_params <- lapply(extract_lag_matrices(var_model), function(x) A %*% x)
+
+  result$svar_params <- svar_params
 
   return(result)
 }
