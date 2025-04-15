@@ -142,6 +142,7 @@ construct_svar_template <- function(adj) {
 }
 
 cumsum_irf <- function(IRF, h) {
+
   # Ellenőrzés: h nem lehet nagyobb, mint a dimenzió
   if (h > dim(IRF)[3]) {
     stop("h is larger than the number of horizons in IRF.")
