@@ -97,10 +97,6 @@ calculate_irf <- function(var_model, n.ahead, ortho = FALSE, shock = "None") {
   IRF <- array(0, dim = c(K, K, n.ahead + 1))
   IRF[, , 1] <- shock_mat  # kezdő sokkhatás
 
-  if (n.ahead==0){
-    return(abs(IRF))
-  }
-
   # Rekurzív IRF számítás
   for (h in 1:n.ahead) {
     IRF_h <- matrix(0, nrow = K, ncol = K)
