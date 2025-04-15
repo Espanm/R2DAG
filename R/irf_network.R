@@ -47,7 +47,7 @@ irf_network <- function(var_model, n.ahead, cumsum=TRUE, amat=FALSE){
   result$table <- irf_matrix
   result$direct <- cumsum_irf(IRF, 1)
   result$indirect <- result$table - result$direct
-  result$tci <- off_diag_percent(irf_matrix)
+  result$tci <- off_diag_percentage(irf_matrix)
   result$from <- colSums(irf_matrix)
   result$to <- rowSums(irf_matrix)
 
