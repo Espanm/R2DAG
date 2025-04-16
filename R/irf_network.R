@@ -45,10 +45,19 @@ irf_network <- function(var_model, n.ahead, cumsum=TRUE, amat=FALSE){
 
   result <- list()
 
-  result$table <- irf_matrix
+  result$mult <- max(rowSums(irf_matrix))
+
+  result$table <- irf_matrix / max(rowSums(irf_matrix))
   result$tci <- off_diag_percentage(irf_matrix)
-  result$from <- colSums(irf_matrix)
-  result$to <- rowSums(irf_matrix)
+
+  non_diag_sums_col <- apply(irf_matrix, 2, function(col) sum(col) - diag(irf_matrix))
+  result$from <- apply(non_diag_sums_col, 2, sum) / colSums(irf_matrix)
+  names(result$from) <- colnames(data)
+
+  non_diag_sums <- apply(irf_matrix, 1, function(row) sum(row) - diag(irf_matrix))
+  result$to <- apply(non_diag_sums, 2, sum) /  rowSums(irf_matrix)
+  names(result$to) <- colnames(data)
+
   result$contamperanous$total <- abs(A_inv)
   result$contamperanous$direct <- abs(A)
   result$contamperanous$undirect <- abs(A_inv) - abs(A)
