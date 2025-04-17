@@ -50,12 +50,10 @@ irf_network <- function(var_model, n.ahead, cumsum=TRUE, amat=FALSE){
   result$table <- irf_matrix / max(rowSums(irf_matrix))
   result$tci <- off_diag_percentage(irf_matrix)
 
-  non_diag_sums_col <- apply(irf_matrix, 2, function(col) sum(col) - diag(irf_matrix))
-  result$from <- apply(non_diag_sums_col, 2, sum) / colSums(irf_matrix)
+  result$from <- calculate_non_diag_percentage(irf_matrix, "col")
   names(result$from) <- colnames(data)
 
-  non_diag_sums <- apply(irf_matrix, 1, function(row) sum(row) - diag(irf_matrix))
-  result$to <- apply(non_diag_sums, 2, sum) /  rowSums(irf_matrix)
+  result$to <- calculate_non_diag_percentage(irf_matrix, "to")
   names(result$to) <- colnames(data)
 
   result$contamperanous$total <- abs(A_inv)
@@ -86,3 +84,60 @@ off_diag_percentage <- function(mat) {
   percentage <- 1 - (diag_sum / total_sum)
   return(percentage)
 }
+
+calculate_non_diag_percentage <- function(mat, direction = "row") {
+  # Ellenőrizzük, hogy a bemenet mátrix legyen
+  if (!is.matrix(mat)) stop("Input must be a matrix.")
+
+  # Ellenőrizzük, hogy a direction "row" vagy "col" legyen
+  if (!(direction %in% c("row", "col"))) stop("Direction must be either 'row' or 'col'.")
+
+  # Sorok és oszlopok számának lekérése
+  nrow_mat <- nrow(mat)
+  ncol_mat <- ncol(mat)
+
+  # Készítünk egy vektort a nem diagonális elemek százalékos arányának
+  result <- numeric()
+
+  if (direction == "row") {
+    # Sorok szerint számolunk
+    for (i in 1:nrow_mat) {
+      # Sor összegének kiszámítása
+      row_sum <- sum(mat[i, ])
+
+      # Nem diagonális elemek összegének kiszámítása
+      non_diag_sum <- 0
+      for (j in 1:ncol_mat) {
+        if (i != j) {  # Ha nem diagonális elem
+          non_diag_sum <- non_diag_sum + mat[i, j]
+        }
+      }
+
+      # Százalékos arány: nem diagonális elemek / sor összegéhez
+      result[i] <- (non_diag_sum / row_sum)
+    }
+
+
+  } else {
+    # Oszlopok szerint számolunk
+    for (j in 1:ncol_mat) {
+      # Oszlop összegének kiszámítása
+      col_sum <- sum(mat[, j])
+
+      # Nem diagonális elemek összegének kiszámítása
+      non_diag_sum <- 0
+      for (i in 1:nrow_mat) {
+        if (i != j) {  # Ha nem diagonális elem
+          non_diag_sum <- non_diag_sum + mat[i, j]
+        }
+      }
+
+      # Százalékos arány: nem diagonális elemek / oszlop összegéhez
+      result[j] <- (non_diag_sum / col_sum)
+    }
+
+  }
+
+  return(result)
+}
+
