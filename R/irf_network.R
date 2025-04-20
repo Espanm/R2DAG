@@ -49,14 +49,14 @@ irf_network <- function(var_model, n.ahead, cumsum=TRUE, amat=FALSE){
 
   result$table <- irf_matrix / max(rowSums(irf_matrix))
 
-  result$from <- calculate_non_diag_percentage(irf_matrix, "col")
+  result$from <- calculate_non_diag_percentage(irf_matrix, "row")
   names(result$from) <- colnames(data)
 
-  result$to <- calculate_non_diag_percentage(irf_matrix, "row")
+  result$to <- calculate_non_diag_percentage(irf_matrix, "col")
   names(result$to) <- colnames(data)
 
   result$tci <- mean(result$from)
-  result$net <- result$from - result$to
+  result$net <- result$to - result$from
   result$contamperanous$total <- abs(A_inv)
   result$contamperanous$direct <- abs(A)
   result$contamperanous$undirect <- abs(A_inv) - abs(A)
