@@ -55,7 +55,7 @@ irf_network <- function(var_model, n.ahead, cumsum=TRUE, amat=FALSE){
   result$to <- calculate_non_diag_percentage(irf_matrix, "row")
   names(result$to) <- colnames(data)
 
-  result$tci <- mean(result$to)
+  result$tci <- mean(result$from)
   result$contamperanous$total <- abs(A_inv)
   result$contamperanous$direct <- abs(A)
   result$contamperanous$undirect <- abs(A_inv) - abs(A)
