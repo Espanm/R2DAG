@@ -142,3 +142,61 @@ calculate_non_diag_percentage <- function(mat, direction = "row") {
   return(result)
 }
 
+rolling_irf_network <- function(data, block_size, n.ahead, cumsum=TRUE, amat=FALSE){
+
+  n <- nrow(data)
+  p <- ncol(data)
+
+  tci_vector <- c()
+  to_df <- data.frame(matrix(ncol = p, nrow = 0))
+  colnames(to_df) <- colnames(data)
+  from_df <- data.frame(matrix(ncol = p, nrow = 0))
+  colnames(from_df) <- colnames(data)
+
+  for (i in 1:(n-block_size)){
+    rolling_data <- data[i:(i+block_size),]
+    var_model <- VAR(rolling_data, p = 1, type = "const", season = NULL, exog = NULL)
+    network <- irf_network(var_model, n.ahead=n.ahead, cumsum=cumsum, amat=amat)
+    tci_vector <- c(network$tci, tci_vector)
+    to_df <- rbind(to_df, as.data.frame(as.list(network$to)))
+    from_df <- rbind(from_df, as.data.frame(as.list(network$from)))
+
+  }
+
+  result <- c()
+
+  result$tci_vector <- tci_vector
+  result$to_df <- to_df
+  result$from_df <- from_df
+  return(result)
+}
+
+rolling_dy_network <- function(data, block_size, n.ahead){
+
+  n <- nrow(data)
+  p <- ncol(data)
+
+  tci_vector <- c()
+  to_df <- data.frame(matrix(ncol = p, nrow = 0))
+  colnames(to_df) <- colnames(data)
+  from_df <- data.frame(matrix(ncol = p, nrow = 0))
+  colnames(from_df) <- colnames(data)
+
+  for (i in 1:(n-block_size)){
+    rolling_data <- data[i:(i+block_size),]
+    var_model <- VAR(rolling_data, p = 1, type = "const", season = NULL, exog = NULL)
+    B_hat <- Bcoef(var_model)
+    R = resid(var_model)
+    Sigma_hat = cov(R)
+    fevd = FEVD(Phi=B_hat, Sigma=Sigma_hat, nfore=5, type="time", generalized=TRUE)$FEVD
+    dca = ConnectednessTable(fevd)
+    tci_vector <- c(dca$TCI, tci_vector)
+
+  }
+
+  result <- c()
+
+  result$tci_vector <- tci_vector
+  return(result)
+}
+

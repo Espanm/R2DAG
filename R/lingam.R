@@ -54,3 +54,37 @@ count_isolated_nodes <- function(adj_mat) {
 
   return(sum(isolated))
 }
+
+bootstrap_lingam <- function(data, B = 100) {
+  n <- nrow(data)
+  p <- ncol(data)
+  amat_list <- vector("list", B)
+
+  for (b in 1:B) {
+    # Bootstrap minta
+    idx <- sample(1:n, size = n, replace = TRUE)
+    resampled_data <- data[idx, ]
+    # LiNGAM futtatása
+    lingam_fit <- lingam(resampled_data)
+    amat <- ifelse(as.matrix(lingam_fit$Bpruned) != 0, 1, 0)
+
+    # Bináris mátrix stringként (egyedi struktúra azonosításához)
+    amat_list[[b]] <- paste(amat, collapse = "")
+  }
+
+  # Gyakoriság számítása
+  table_freq <- table(unlist(amat_list))
+  sorted_freq <- sort(table_freq, decreasing = TRUE)
+
+  # Visszaalakítás mátrixokra
+  unique_amats <- lapply(names(sorted_freq), function(s) {
+    mat <- matrix(as.numeric(strsplit(s, "")[[1]]), nrow = p, byrow = FALSE)
+    return(mat)
+  })
+
+  # Kimenet: lista struktúrák és azok gyakoriságai
+  return(list(
+    matrices = unique_amats,
+    frequencies = as.numeric(sorted_freq) / B
+  ))
+}
