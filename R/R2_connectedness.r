@@ -77,7 +77,10 @@ R2_network <- function(data, method="genizi", directed=TRUE, amat=FALSE) {
   result$table <- result_matrix
   result$from <- colSums(result_matrix)
   result$to <- rowSums(result_matrix)
+  result$net <- result$to - result$from
   result$tci <- sum(tci) / (p-1)
+
+
 
   return(result)
 }
