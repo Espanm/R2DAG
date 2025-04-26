@@ -75,16 +75,10 @@ R2_network <- function(data, method="genizi", directed=TRUE, amat=FALSE) {
 
   result <- list()
   result$table <- result_matrix
-  result$from <- colSums(result_matrix)
-  result$to <- rowSums(result_matrix)
+  result$to <- colSums(result_matrix)
+  result$from <- rowSums(result_matrix)
   result$net <- result$to - result$from
-  if (directed==TRUE){
-    #result$tci <- sum(tci) / (p-1)
-    result$tci <- sum(tci) / length(selected_cols)
-  }
-  else{
-    result$tci <- sum(tci) / p
-  }
+  result$tci <- sum(tci) / sum(result$from != 0)
 
 
   return(result)
