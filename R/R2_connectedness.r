@@ -105,8 +105,8 @@ rolling_network <- function(data, block_size, method="genizi", directed=TRUE, dy
   from_df <- data.frame(matrix(ncol = p, nrow = 0))
   colnames(from_df) <- colnames(data)
 
-  for (i in 1:(n-block_size)){
-    rolling_data <- data[i:(i+block_size),]
+  for (i in 1:(n-block_size+1)){
+    rolling_data <- data[i:(i+block_size-1),]
     network <- R2_network(rolling_data, method=method, directed=directed, amat=amat)
     tci_vector <- c(network$tci, tci_vector)
     to_df <- rbind(to_df, as.data.frame(as.list(network$to)))
