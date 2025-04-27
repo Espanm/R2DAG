@@ -79,6 +79,7 @@ R2_network <- function(data, method="genizi", directed=TRUE, amat=FALSE) {
   result$from <- rowSums(result_matrix)
   result$net <- result$to - result$from
   result$tci <- sum(tci) / sum(result$from != 0)
+  result$amat <- amat
 
 
   return(result)
@@ -121,6 +122,7 @@ rolling_network <- function(data, block_size, method="genizi", directed=TRUE, dy
     to_df <- data.frame(matrix(ncol = p, nrow = 0))
     colnames(to_df) <- colnames(data)
     from_df <- data.frame(matrix(ncol = p, nrow = 0))
+    amat_vector <- c()
     colnames(from_df) <- colnames(data)
 
     for (i in 1:(n-block_size)){
@@ -129,6 +131,7 @@ rolling_network <- function(data, block_size, method="genizi", directed=TRUE, dy
       tci_vector <- c(network$tci, tci_vector)
       to_df <- rbind(to_df, as.data.frame(as.list(network$to)))
       from_df <- rbind(from_df, as.data.frame(as.list(network$from)))
+      amat_vector <- c(network$amat, amat_vector)
 
     }
   }
@@ -138,6 +141,7 @@ rolling_network <- function(data, block_size, method="genizi", directed=TRUE, dy
   result$tci_vector <- tci_vector
   result$to_df <- to_df
   result$from_df <- from_df
+  result$amat_vector <- amat_vector
   return(result)
 }
 
