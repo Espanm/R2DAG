@@ -78,8 +78,18 @@ R2_network <- function(data, method="genizi", directed=TRUE, amat=FALSE) {
   result$to <- colSums(result_matrix)
   result$from <- rowSums(result_matrix)
   result$net <- result$to - result$from
-  result$tci <- sum(tci) / sum(result$from != 0)
+
+  valid_tci <- tci[is.finite(tci)]
+  nonzero_from <- sum(result$from != 0)
+
+  if (length(valid_tci) == 0 || nonzero_from == 0) {
+    result$tci <- 0
+  } else {
+    result$tci <- sum(valid_tci) / nonzero_from
+  }
+
   result$amat <- amat
+  result$npdc <- result$table - t(result$table)
 
 
   return(result)
