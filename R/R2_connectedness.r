@@ -2,6 +2,7 @@
 #library(relaimpo)
 #source("lingam.r")
 
+
 R2_network <- function(data, method="genizi", directed=TRUE, amat=FALSE) {
 
   if ((is.logical(amat) && !amat) && directed) {
@@ -10,9 +11,9 @@ R2_network <- function(data, method="genizi", directed=TRUE, amat=FALSE) {
   }
 
   if (!is.logical(amat)){
-  # Assign column names to adjacency matrix
-  colnames(amat) <- rownames(amat) <- colnames(data)
-  s <- count_isolated_nodes(amat)
+    # Assign column names to adjacency matrix
+    colnames(amat) <- rownames(amat) <- colnames(data)
+    s <- count_isolated_nodes(amat)
   }
 
   # Get the number of variables
@@ -34,7 +35,7 @@ R2_network <- function(data, method="genizi", directed=TRUE, amat=FALSE) {
   for (i in seq_len(p)) {
 
     if (directed==TRUE){
-    # Identify parent nodes (nodes with paths leading to i)
+      # Identify parent nodes (nodes with paths leading to i)
       selected_cols <- paths[[colnames(data)[i]]]
     } else {
       selected_cols <-  colnames(data[, -i, drop=FALSE])
@@ -85,7 +86,12 @@ R2_network <- function(data, method="genizi", directed=TRUE, amat=FALSE) {
   if (length(valid_tci) == 0 || nonzero_from == 0) {
     result$tci <- 0
   } else {
-    result$tci <- sum(valid_tci) / nonzero_from
+    if (directed){
+      result$tci <- sum(valid_tci) / (p-1)
+    }
+    else{
+      result$tci <- sum(valid_tci) / p
+    }
   }
 
   result$amat <- amat
@@ -94,6 +100,7 @@ R2_network <- function(data, method="genizi", directed=TRUE, amat=FALSE) {
 
   return(result)
 }
+
 
 
 rolling_network <- function(data, block_size, method="genizi", directed=TRUE, dynamic_structure=TRUE){
@@ -154,6 +161,88 @@ rolling_network <- function(data, block_size, method="genizi", directed=TRUE, dy
 
   return(result)
 }
+
+theoretical_calc <- function(A0, colnames = paste0("X", 1:nrow(A0)), directed = T) {
+  p <- nrow(A0)
+  A0_inv <- solve(A0)
+  cov_Y <- A0_inv %*% t(A0_inv)
+  corr_Y <- cov2cor(cov_Y)
+
+  result_matrix <- matrix(0, nrow = p, ncol = p)
+  colnames(result_matrix) <- rownames(result_matrix) <- colnames
+
+  amat <- matrix(0, nrow = p, ncol = p)
+  for (i in 1:p) {
+    for (j in 1:p) {
+      if (i != j && A0[i, j] != 0) {
+        amat[i, j] <- 1
+      }
+    }
+  }
+  colnames(amat) <- rownames(amat) <- colnames
+
+  if (directed) {
+    paths <- compute_reachability(amat)
+  }
+
+  tci_values <- numeric(p)
+
+  for (i in 1:p) {
+    varname <- colnames[i]
+
+    if (directed) {
+      parent_names <- paths[[varname]]
+    } else {
+      parent_names <- colnames[-i]  # all other variables
+    }
+
+    parents <- which(colnames %in% parent_names)
+
+    if (length(parents) == 0) {
+      tci_values[i] <- 0
+      next
+    }
+
+    r_yx <- corr_Y[i, parents]
+    R_xx <- corr_Y[parents, parents, drop = FALSE]
+
+    if (length(parents) == 1) {
+      contrib <- r_yx^2
+      names(contrib) <- colnames[parents]
+    } else {
+      eig <- eigen(R_xx)
+      if (any(eig$values <= 0)) {
+        warning(paste("R_xx is not positive definite at node", i))
+        next
+      }
+
+      R_inv_sqrt <- eig$vectors %*% diag(1 / sqrt(eig$values)) %*% t(eig$vectors)
+      c_vec <- R_inv_sqrt %*% r_yx
+      contrib <- c_vec^2
+      names(contrib) <- colnames[parents]
+    }
+
+    result_matrix[i, names(contrib)] <- contrib
+    tci_values[i] <- sum(contrib)
+  }
+
+  result <- list()
+  result$table <- result_matrix
+  result$to <- colSums(result_matrix)
+  result$from <- rowSums(result_matrix)
+  result$net <- result$to - result$from
+  if (directed){
+    result$tci <- sum(tci_values) / (p-1)
+  }
+  else{
+    result$tci <- sum(tci_values) / p
+  }
+  result$amat <- amat
+  result$npdc <- result_matrix - t(result_matrix)
+
+  return(result)
+}
+
 
 
 
