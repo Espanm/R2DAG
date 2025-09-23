@@ -1,14 +1,26 @@
 Package: R2DAG
 Type: Package
-Title: Used codes for the R2 connectedness article
+Title: Used Codes for the R2 Connectedness Article
 Version: 0.1.1
 Authors@R: person("Marton", "Espan", email = "espan.marci@email.com", role = c("aut", "cre"))
-Description: A package for R2 connectedness analysis.
-License: MIT
+Description: R2 connectedness analysis tools.
+License: MIT + file LICENSE
 Encoding: UTF-8
-LazyData: true
+LazyData: false
 RoxygenNote: 7.3.2
+Depends:
+    R (>= 4.1)
 Imports:
-    pcalg,
     igraph,
     relaimpo
+Suggests:
+    pcalg,
+    ggm,
+    graph,
+    RBGL
+Remotes:
+    bioc::graph,
+    bioc::RBGL
+URL: https://github.com/Espanm/R2DAG
+BugReports: https://github.com/Espanm/R2DAG/issues
+
