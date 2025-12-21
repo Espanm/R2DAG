@@ -1,53 +1,57 @@
-irf_network <- function(var_model, n.ahead, cumsum=TRUE, amat=FALSE){
+#' IRF-based network decomposition from a VAR/SVAR
+#'
+#' Builds an SVAR identification (A matrix) consistent with an adjacency matrix
+#' and computes an IRF-based connectedness matrix at horizon n.ahead.
+#'
+#' @param var_model A VAR model object (e.g., from vars::VAR)
+#' @param n.ahead Integer horizon
+#' @param cumsum Logical; if TRUE uses cumulative IRFs up to n.ahead
+#' @param amat FALSE or an adjacency matrix (child x parent). If FALSE, learned from data.
+#' @return A list with normalized IRF table and summary measures.
+#' @export
+irf_network <- function(var_model, n.ahead, cumsum = TRUE, amat = FALSE) {
 
   data <- var_model$y
-  # Get the number of variables
   p <- ncol(data)
 
-  if ((is.logical(amat) && !amat)) {
+  if (is.logical(amat) && !amat) {
     lingam_amat <- data2amat(data)
     amat <- lingam_amat$amat
   }
 
-  if (!is.logical(amat)){
-    # Assign column names to adjacency matrix
-    colnames(amat) <- rownames(amat) <- colnames(data)
-  }
-  paths <- compute_reachability(amat)
-
-  # 1. Változók nevei
-  vars <- names(paths)
-
-  # 2. Inicializáljuk a k × k nullmátrixot
-  paths_matrix <- matrix(0, nrow = p, ncol = p)
-  rownames(paths_matrix) <- colnames(paths_matrix) <- vars
-
-  # 3. Feltöltés: A[i, j] = 1, ha paths[[i]] tartalmazza j-t (i → j)
-  for (i in vars) {
-    targets <- paths[[i]]
-    paths_matrix[i, targets] <- 1
+  if (is.logical(amat)) {
+    stop("`amat` must be a matrix (or set amat = FALSE to learn it).")
   }
 
+  colnames(amat) <- rownames(amat) <- colnames(data)
 
-  # Kezdetben: 1-ek a diagonálban, 0 mindenhol máshol
+  # SVAR template from adjacency
   Amat <- construct_svar_template(amat)
 
-  svar_model <- SVAR(x = var_model, estmethod = "scoring", Amat = Amat, Bmat = NULL, max.iter = 1000, maxls = 1000, conv.crit = 1.0e-8)
+  # Use explicit namespace to satisfy R CMD check
+  svar_model <- vars::SVAR(
+    x = var_model,
+    estmethod = "scoring",
+    Amat = Amat,
+    Bmat = NULL,
+    max.iter = 1000,
+    maxls = 1000,
+    conv.crit = 1.0e-8
+  )
+
   A <- svar_model[1]$A
   A_inv <- solve(A)
 
   IRF <- calculate_irf(var_model, n.ahead, ortho = FALSE, shock = A_inv)
 
-  if (cumsum){irf_matrix <- cumsum_irf(IRF, n.ahead)}
-  else {irf_matrix <- IRF[,,(n.ahead+1)]}
-
+  irf_matrix <- if (isTRUE(cumsum)) cumsum_irf(IRF, n.ahead) else IRF[, , (n.ahead + 1)]
   colnames(irf_matrix) <- rownames(irf_matrix) <- colnames(data)
 
   result <- list()
 
-  result$mult <- max(rowSums(irf_matrix))
-
-  result$table <- irf_matrix / max(rowSums(irf_matrix))
+  mult <- max(rowSums(irf_matrix))
+  result$mult <- mult
+  result$table <- if (is.finite(mult) && mult > 0) irf_matrix / mult else irf_matrix
 
   result$from <- calculate_non_diag_percentage(irf_matrix, "row")
   names(result$from) <- colnames(data)
@@ -55,148 +59,23 @@ irf_network <- function(var_model, n.ahead, cumsum=TRUE, amat=FALSE){
   result$to <- calculate_non_diag_percentage(irf_matrix, "col")
   names(result$to) <- colnames(data)
 
-  result$tci <- mean(result$from)
+  result$tci <- mean(result$from, na.rm = TRUE)
   result$net <- result$to - result$from
+
   result$contamperanous$total <- abs(A_inv)
   result$contamperanous$direct <- abs(A)
   result$contamperanous$undirect <- abs(A_inv) - abs(A)
-  if (n.ahead > 0){
-    result$lagged$total <- irf_matrix - IRF[,,1]
-    result$lagged$direct  <- IRF[,,2]
-    result$lagged$undirect <- irf_matrix - IRF[,,2] - IRF[,,1]
+
+  if (n.ahead > 0) {
+    result$lagged$total <- irf_matrix - IRF[, , 1]
+    result$lagged$direct <- IRF[, , 2]
+    result$lagged$undirect <- irf_matrix - IRF[, , 2] - IRF[, , 1]
   }
+
   svar_params <- list()
   svar_params$A0 <- A
   svar_params$var_params <- lapply(extract_lag_matrices(var_model), function(x) A %*% x)
-
   result$svar_params <- svar_params
 
-  return(result)
+  result
 }
-
-off_diag_percentage <- function(mat) {
-  if (!is.matrix(mat)) stop("Input must be a matrix.")
-
-  total_sum <- sum(mat)
-  diag_sum <- sum(diag(mat))
-
-  if (total_sum == 0) return(NA)  # avoid division by zero
-
-  percentage <- 1 - (diag_sum / total_sum)
-  return(percentage)
-}
-
-calculate_non_diag_percentage <- function(mat, direction = "row") {
-  # Ellenőrizzük, hogy a bemenet mátrix legyen
-  if (!is.matrix(mat)) stop("Input must be a matrix.")
-
-  # Ellenőrizzük, hogy a direction "row" vagy "col" legyen
-  if (!(direction %in% c("row", "col"))) stop("Direction must be either 'row' or 'col'.")
-
-  # Sorok és oszlopok számának lekérése
-  nrow_mat <- nrow(mat)
-  ncol_mat <- ncol(mat)
-
-  # Készítünk egy vektort a nem diagonális elemek százalékos arányának
-  result <- numeric()
-
-  if (direction == "row") {
-    # Sorok szerint számolunk
-    for (i in 1:nrow_mat) {
-      # Sor összegének kiszámítása
-      row_sum <- sum(mat[i, ])
-
-      # Nem diagonális elemek összegének kiszámítása
-      non_diag_sum <- 0
-      for (j in 1:ncol_mat) {
-        if (i != j) {  # Ha nem diagonális elem
-          non_diag_sum <- non_diag_sum + mat[i, j]
-        }
-      }
-
-      # Százalékos arány: nem diagonális elemek / sor összegéhez
-      result[i] <- (non_diag_sum / row_sum)
-    }
-
-
-  } else {
-    # Oszlopok szerint számolunk
-    for (j in 1:ncol_mat) {
-      # Oszlop összegének kiszámítása
-      col_sum <- sum(mat[, j])
-
-      # Nem diagonális elemek összegének kiszámítása
-      non_diag_sum <- 0
-      for (i in 1:nrow_mat) {
-        if (i != j) {  # Ha nem diagonális elem
-          non_diag_sum <- non_diag_sum + mat[i, j]
-        }
-      }
-
-      # Százalékos arány: nem diagonális elemek / oszlop összegéhez
-      result[j] <- (non_diag_sum / col_sum)
-    }
-
-  }
-
-  return(result)
-}
-
-rolling_irf_network <- function(data, block_size, n.ahead, cumsum=TRUE, amat=FALSE){
-
-  n <- nrow(data)
-  p <- ncol(data)
-
-  tci_vector <- c()
-  to_df <- data.frame(matrix(ncol = p, nrow = 0))
-  colnames(to_df) <- colnames(data)
-  from_df <- data.frame(matrix(ncol = p, nrow = 0))
-  colnames(from_df) <- colnames(data)
-
-  for (i in 1:(n-block_size)){
-    rolling_data <- data[i:(i+block_size),]
-    var_model <- VAR(rolling_data, p = 1, type = "const", season = NULL, exog = NULL)
-    network <- irf_network(var_model, n.ahead=n.ahead, cumsum=cumsum, amat=amat)
-    tci_vector <- c(network$tci, tci_vector)
-    to_df <- rbind(to_df, as.data.frame(as.list(network$to)))
-    from_df <- rbind(from_df, as.data.frame(as.list(network$from)))
-
-  }
-
-  result <- c()
-
-  result$tci_vector <- tci_vector
-  result$to_df <- to_df
-  result$from_df <- from_df
-  return(result)
-}
-
-rolling_dy_network <- function(data, block_size, n.ahead){
-
-  n <- nrow(data)
-  p <- ncol(data)
-
-  tci_vector <- c()
-  to_df <- data.frame(matrix(ncol = p, nrow = 0))
-  colnames(to_df) <- colnames(data)
-  from_df <- data.frame(matrix(ncol = p, nrow = 0))
-  colnames(from_df) <- colnames(data)
-
-  for (i in 1:(n-block_size)){
-    rolling_data <- data[i:(i+block_size),]
-    var_model <- VAR(rolling_data, p = 1, type = "const", season = NULL, exog = NULL)
-    B_hat <- Bcoef(var_model)
-    R = resid(var_model)
-    Sigma_hat = cov(R)
-    fevd = FEVD(Phi=B_hat, Sigma=Sigma_hat, nfore=5, type="time", generalized=TRUE)$FEVD
-    dca = ConnectednessTable(fevd)
-    tci_vector <- c(dca$TCI, tci_vector)
-
-  }
-
-  result <- c()
-
-  result$tci_vector <- tci_vector
-  return(result)
-}
-

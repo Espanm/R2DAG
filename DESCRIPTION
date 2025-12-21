@@ -1,9 +1,10 @@
 Package: R2DAG
 Type: Package
-Title: Used Codes for the R2 Connectedness Article
+Title: R2 and IRF-based networks for paper by Marton Espan and Milan Csaba Badics
 Version: 0.1.1
 Authors@R: person("Marton", "Espan", email = "espan.marci@email.com", role = c("aut", "cre"))
-Description: R2 connectedness analysis tools.
+Description: Tools for R2-based and IRF-based connectedness analysis including theoretical, rolling, and simulation-based
+    network measures.
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: false
@@ -11,10 +12,10 @@ RoxygenNote: 7.3.2
 Depends:
     R (>= 4.1)
 Imports:
-    igraph,
-    relaimpo
+     vars,
+     pcalg,
+     relaimpo
 Suggests:
-    pcalg,
     ggm,
     graph,
     RBGL
@@ -23,4 +24,5 @@ Remotes:
     bioc::RBGL
 URL: https://github.com/Espanm/R2DAG
 BugReports: https://github.com/Espanm/R2DAG/issues
+
 

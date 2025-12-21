@@ -2,3 +2,9 @@
 .Rhistory
 .RData
 .Ruserdata
+
+^Ongoing research$
+^TDK$
+^TDK2$
+.*\.ipynb$
+
