@@ -46,8 +46,12 @@
     if (all(Pk == 0)) break
     Ind <- Ind + abs(Pk)
   }
+
+  diag(Ind) <- 0
+
   Ind
 }
+
 
 # Compute standardized beta matrix (stable and fast).
 compute_standardized_betas <- function(corr_Y, amat) {

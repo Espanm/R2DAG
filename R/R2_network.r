@@ -8,7 +8,6 @@
 #' @return A list with network tables and summary measures
 #' @export
 R2_network <- function(data,
-                       method = "genizi",
                        directed = TRUE,
                        amat = FALSE) {
 
@@ -51,13 +50,8 @@ R2_network <- function(data,
   # 2) Correlation matrix
   corr_Y <- stats::cor(data, use = "pairwise.complete.obs")
 
-  # 3) Direct contributions
+  # 3) Direct contributions (Genizi only)
   Direct <- matrix(0, p, p, dimnames = list(colnames(data), colnames(data)))
-
-  # Only Genizi is supported
-  if (!identical(tolower(method), "genizi")) {
-    stop("Only method = 'genizi' is supported in this package.")
-  }
   for (i in seq_len(p)) {
     Direct[i, ] <- .direct_row_genizi_fast(i, corr_Y, amat)
   }
@@ -85,7 +79,6 @@ R2_network <- function(data,
   tci_total    <- if (directed) sum(row_R2_total)    / (p - 1) else sum(row_R2_total)    / p
 
   mult <- max(rowSums(Total))
-
 
   list(
     direct_table   = Direct,
