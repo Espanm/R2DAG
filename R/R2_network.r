@@ -10,15 +10,22 @@
 R2_network <- function(data,
                        method = "genizi",
                        directed = TRUE,
-                       amat = FALSE,
-                       prev_amat = NULL) {
+                       amat = FALSE) {
 
   stopifnot(is.data.frame(data) || is.matrix(data))
   data <- as.data.frame(data)
   stopifnot(!is.null(colnames(data)))
   p <- ncol(data)
 
-  # 1) LiNGAM -> amat[child, parent] = 1
+  # 0) If undirected and amat not provided: use complete graph (off-diagonal 1s)
+  if (!directed && (is.logical(amat) && !amat)) {
+    A <- matrix(1L, nrow = p, ncol = p)
+    diag(A) <- 0L
+    colnames(A) <- rownames(A) <- colnames(data)
+    amat <- A
+  }
+
+  # 1) LiNGAM -> amat[child, parent] = 1 (only if directed and amat not provided)
   if ((is.logical(amat) && !amat) && directed) {
     X <- as.matrix(data)
     fit_lingam <- pcalg::lingam(X, verbose = FALSE)
@@ -34,9 +41,11 @@ R2_network <- function(data,
     amat <- A
   }
 
+  # 1b) At this point, amat must be a matrix
   if (is.logical(amat)) {
-    stop("Provide a directed adjacency matrix 'amat' or set directed=TRUE to learn it via LiNGAM.")
+    stop("Provide an adjacency matrix 'amat' or set directed=TRUE to learn it via LiNGAM.")
   }
+  amat <- as.matrix(amat)
   colnames(amat) <- rownames(amat) <- colnames(data)
 
   # 2) Correlation matrix
@@ -47,7 +56,7 @@ R2_network <- function(data,
 
   # Only Genizi is supported
   if (!identical(tolower(method), "genizi")) {
-    stop("Only method = 'genizi' is supported in this package version.")
+    stop("Only method = 'genizi' is supported in this package.")
   }
   for (i in seq_len(p)) {
     Direct[i, ] <- .direct_row_genizi_fast(i, corr_Y, amat)
@@ -76,11 +85,7 @@ R2_network <- function(data,
   tci_total    <- if (directed) sum(row_R2_total)    / (p - 1) else sum(row_R2_total)    / p
 
   mult <- max(rowSums(Total))
-  if (mult != 0) {
-    tci_direct   <- tci_direct / mult
-    tci_indirect <- tci_indirect / mult
-    tci_total    <- tci_total / mult
-  }
+
 
   list(
     direct_table   = Direct,
