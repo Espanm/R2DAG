@@ -56,29 +56,42 @@ R2_network <- function(data,
     Direct[i, ] <- .direct_row_genizi_fast(i, corr_Y, amat)
   }
 
-  # 4) Standardized betas and indirect contributions
-  Bstd <- compute_standardized_betas(corr_Y, amat)
+  # 4) Indirect only if directed=TRUE
+  if (directed) {
+    Bstd <- compute_standardized_betas(corr_Y, amat)
 
-  Indirect <- .indirect_from_powers_abs(Bstd)
-  colnames(Indirect) <- rownames(Indirect) <- colnames(data)
+    Indirect <- .indirect_from_powers_abs(Bstd) / 2
+    colnames(Indirect) <- rownames(Indirect) <- colnames(data)
+    Direct <- Direct / 2
 
-  # 5) Aggregate network measures
-  Total <- Direct + Indirect
+    Total <- Direct + Indirect
 
+    row_R2_direct   <- rowSums(Direct)
+    row_R2_indirect <- rowSums(Indirect)
+    row_R2_total    <- rowSums(Total)
+
+    tci_direct   <- sum(row_R2_direct)   / (p - 1)
+    tci_indirect <- sum(row_R2_indirect) / (p - 1)
+    tci_total    <- sum(row_R2_total)    / (p - 1)
+  } else {
+    Bstd <- NULL
+    Indirect <- NULL
+    Total <- Direct
+
+    row_R2_direct <- NULL
+    row_R2_total  <- rowSums(Total)
+
+    # undirected: total = direct, no indirect component
+    tci_direct   <- NULL
+    tci_indirect <- NULL
+    tci_total    <- sum(row_R2_total)  / p
+  }
+
+  # 5) Aggregate network measures (based on Total, which is Direct if undirected)
   to_total   <- colSums(Total)
   from_total <- rowSums(Total)
   net_total  <- to_total - from_total
   npdc_total <- Total - t(Total)
-
-  row_R2_direct   <- rowSums(Direct)
-  row_R2_indirect <- rowSums(Indirect)
-  row_R2_total    <- rowSums(Total)
-
-  tci_direct   <- if (directed) sum(row_R2_direct)   / (p - 1) else sum(row_R2_direct)   / p
-  tci_indirect <- if (directed) sum(row_R2_indirect) / (p - 1) else sum(row_R2_indirect) / p
-  tci_total    <- if (directed) sum(row_R2_total)    / (p - 1) else sum(row_R2_total)    / p
-
-  mult <- max(rowSums(Total))
 
   list(
     direct_table   = Direct,
@@ -93,7 +106,6 @@ R2_network <- function(data,
     npdc_total     = npdc_total,
     amat           = amat,
     Bstd           = Bstd,
-    corr_Y         = corr_Y,
-    mult           = mult
+    corr_Y         = corr_Y
   )
 }

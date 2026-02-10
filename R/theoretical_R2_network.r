@@ -48,28 +48,41 @@ theoretical_R2_network <- function(A0,
     Direct[i, ] <- .direct_row_genizi_fast(i, corr_Y, amat)
   }
 
-  # --- Indirect effects ---
-  Bstd <- compute_standardized_betas(corr_Y, amat)
+  # --- Indirect effects: only if directed=TRUE ---
+  if (directed) {
+    Bstd <- compute_standardized_betas(corr_Y, amat) 
 
-  Indirect <- .indirect_from_powers_abs(Bstd)
-  colnames(Indirect) <- rownames(Indirect) <- var_names
+    Indirect <- .indirect_from_powers_abs(Bstd) / 2
+    colnames(Indirect) <- rownames(Indirect) <- var_names
+    Direct <- Direct / 2
 
-  # --- Totals ---
-  Total <- Direct + Indirect
+    Total <- Direct + Indirect
 
+    row_R2_direct   <- rowSums(Direct)
+    row_R2_indirect <- rowSums(Indirect)
+    row_R2_total    <- rowSums(Total)
+
+    tci_direct   <- sum(row_R2_direct)   / (p - 1)
+    tci_indirect <- sum(row_R2_indirect) / (p - 1)
+    tci_total    <- sum(row_R2_total)    / (p - 1)
+  } else {
+    Bstd <- NULL
+    Indirect <- NULL
+    Total <- Direct
+
+    row_R2_direct <- NULL
+    row_R2_total  <- rowSums(Total)
+
+    tci_direct   <- NULL
+    tci_indirect <- NULL
+    tci_total    <- sum(row_R2_total)  / p
+  }
+
+  # --- Aggregate measures (based on Total) ---
   to_total   <- colSums(Total)
   from_total <- rowSums(Total)
   net_total  <- to_total - from_total
   npdc_total <- Total - t(Total)
-
-  # --- TCI ---
-  row_R2_direct   <- rowSums(Direct)
-  row_R2_indirect <- rowSums(Indirect)
-  row_R2_total    <- rowSums(Total)
-
-  tci_direct   <- if (directed) sum(row_R2_direct)   / (p - 1) else sum(row_R2_direct)   / p
-  tci_indirect <- if (directed) sum(row_R2_indirect) / (p - 1) else sum(row_R2_indirect) / p
-  tci_total    <- if (directed) sum(row_R2_total)    / (p - 1) else sum(row_R2_total)    / p
 
   mult <- max(rowSums(Total))
 
@@ -88,7 +101,6 @@ theoretical_R2_network <- function(A0,
     Bstd           = Bstd,
     corr_Y         = corr_Y,
     cov_Y          = cov_Y,
-    sigma_eps      = sigma_eps,
-    mult           = mult
+    sigma_eps      = sigma_eps
   )
 }
