@@ -22,8 +22,7 @@ rolling_R2_network <- function(data,
   n <- nrow(data)
   p <- ncol(data)
 
-  if (window_size <= 1 || window_size > n)
-    stop("Invalid window_size.")
+  if (window_size <= 1 || window_size > n) stop("Invalid window_size.")
   if (step < 1) stop("step must be >= 1.")
   if (bootstrap < 1) stop("bootstrap must be >= 1.")
 
@@ -38,6 +37,10 @@ rolling_R2_network <- function(data,
   tci_indirect <- rep(NA_real_, nW)
   tci_total    <- rep(NA_real_, nW)
 
+  # --- NEW: window-by-node NET (TO-FROM) ---
+  net_total <- matrix(NA_real_, nrow = nW, ncol = p,
+                      dimnames = list(NULL, colnames(data)))
+
   amat_mode <- vector("list", nW)
 
   direct_tables   <- if (directed_flag) vector("list", nW) else NULL
@@ -48,6 +51,13 @@ rolling_R2_network <- function(data,
     v <- x[[name]]
     if (is.null(v) || length(v) == 0) return(NA_real_)
     as.numeric(v[1])
+  }
+
+  # --- Safe vector extractor (length p) ---
+  get_vecp <- function(x, name) {
+    v <- x[[name]]
+    if (is.null(v) || length(v) != p) return(rep(NA_real_, p))
+    as.numeric(v)
   }
 
   # --- Single run ---
@@ -66,17 +76,14 @@ rolling_R2_network <- function(data,
   align_amat <- function(M) {
     if (is.null(M) || !is.matrix(M)) return(FALSE)
     if (!all(dim(M) == c(p, p))) return(FALSE)
-
     colnames(M) <- rownames(M) <- colnames(data)
     storage.mode(M) <- "integer"
     M
   }
 
   use_fixed_amats <- is.list(amat_list)
-
   if (use_fixed_amats) {
-    if (length(amat_list) < nW)
-      stop("amat_list shorter than number of windows.")
+    if (length(amat_list) < nW) stop("amat_list shorter than number of windows.")
     amat_list <- lapply(amat_list[seq_len(nW)], align_amat)
   }
 
@@ -85,7 +92,6 @@ rolling_R2_network <- function(data,
   for (k in seq_len(nW)) {
 
     dat_k <- data[starts[k]:ends[k], , drop = FALSE]
-
     res_list <- vector("list", bootstrap)
 
     for (b in seq_len(bootstrap)) {
@@ -117,6 +123,10 @@ rolling_R2_network <- function(data,
     tci_direct[k]   <- mean(vapply(ok, get_num1, numeric(1), "tci_direct"),   na.rm = TRUE)
     tci_indirect[k] <- mean(vapply(ok, get_num1, numeric(1), "tci_indirect"), na.rm = TRUE)
     tci_total[k]    <- mean(vapply(ok, get_num1, numeric(1), "tci_total"),    na.rm = TRUE)
+
+    # --- NEW: NET averages (node-wise) ---
+    net_mat <- vapply(ok, get_vecp, numeric(p), name = "net_total")  # p x B
+    net_total[k, ] <- rowMeans(net_mat, na.rm = TRUE)
 
     # --- Direct / Indirect tables only if directed ---
     if (directed_flag) {
@@ -162,6 +172,7 @@ rolling_R2_network <- function(data,
     tci_direct   = tci_direct,
     tci_indirect = tci_indirect,
     tci_total    = tci_total,
+    net_total    = net_total,   # <-- NEW: nW x p, minden ablakra minden idősor NET-je
     amat_mode    = amat_mode
   )
 
