@@ -312,7 +312,7 @@ networkplot <- function(spillover_pre,
       ),
       args_labels
     ))
-    graphics::text(x = -0.8, y = 1, labels = label_pre, xpd = NA, cex = 5, font = 2)
+    graphics::text(x = -0.8, y = 1, labels = label_pre, xpd = NA, cex = 1.5, font = 2)
     return(invisible(NULL))
   }
 

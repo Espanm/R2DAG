@@ -34,7 +34,7 @@ R2_network <- function(data,
     else stop("No 'B' or 'Bpruned' found in pcalg::lingam output.")
 
     A <- matrix(0L, nrow = p, ncol = p)
-    A[abs(Bm) > 0] <- 1L
+    A[abs(Bm) > 1e-4] <- 1L
     diag(A) <- 0L
     colnames(A) <- rownames(A) <- colnames(data)
     amat <- A
