@@ -312,7 +312,7 @@ networkplot <- function(spillover_pre,
       ),
       args_labels
     ))
-    graphics::text(x = -0.8, y = 1, labels = label_pre, xpd = NA, cex = 1.5, font = 2)
+    graphics::text(x = -0.8, y = 1, labels = label_pre, xpd = NA, cex = 1.2, font = 2)
     return(invisible(NULL))
   }
 
@@ -346,7 +346,7 @@ networkplot <- function(spillover_pre,
       ),
       args_labels_pre
     ))
-    graphics::text(x = -0.8, y = 1, labels = label_pre, xpd = NA, cex = 5, font = 2)
+    graphics::text(x = -0.8, y = 1, labels = label_pre, xpd = NA, cex = 1.2, font = 2)
 
     # POST
     args_labels_post <- edge_label_args(NPDC_post_thrsh, weights)
@@ -366,7 +366,7 @@ networkplot <- function(spillover_pre,
       ),
       args_labels_post
     ))
-    graphics::text(x = -1, y = 1, labels = label_post, xpd = NA, cex = 5, font = 2)
+    graphics::text(x = -1, y = 1, labels = label_post, xpd = NA, cex = 1.2, font = 2)
 
     return(invisible(NULL))
   }
@@ -398,7 +398,7 @@ networkplot <- function(spillover_pre,
     ),
     args_labels_pre
   ))
-  graphics::text(x = -0.8, y = 1, labels = label_pre, xpd = NA, cex = 5, font = 2)
+  graphics::text(x = -0.8, y = 1, labels = label_pre, xpd = NA, cex = 1.2, font = 2)
 
   # POST
   args_labels_post <- edge_label_args(NPDC_post_thrsh, weights)
@@ -418,7 +418,7 @@ networkplot <- function(spillover_pre,
     ),
     args_labels_post
   ))
-  graphics::text(x = -1, y = 1, labels = label_post, xpd = NA, cex = 5, font = 2)
+  graphics::text(x = -1, y = 1, labels = label_post, xpd = NA, cex = 1.2, font = 2)
 
   # DIFF
   pie_diff <- pie_map_post - pie_map_pre
@@ -457,7 +457,7 @@ networkplot <- function(spillover_pre,
     ),
     args_labels_diff
   ))
-  graphics::text(x = -1, y = 1, labels = label_diff, xpd = NA, cex = 5, font = 2)
+  graphics::text(x = -1, y = 1, labels = label_diff, xpd = NA, cex = 1.2, font = 2)
 
   invisible(NULL)
 }
