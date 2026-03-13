@@ -54,7 +54,7 @@ R2_network <- function(data,
       W <- matrix(0, p, p)
 
       for(i in seq_along(W_hat)){
-        W[i, ] <- W_hat[[i]]
+        W[i, ] <- W_hat[i]
       }
 
       W <- t(W)
