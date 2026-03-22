@@ -4,12 +4,16 @@
 #' @param directed logical
 #' @param amat FALSE or adjacency matrix (child x parent)
 #' @param dag_method "lingam" or "notears"
+#' @param standardize_for_dag logical; if TRUE, variables are standardized
+#'   columnwise before DAG learning with LiNGAM. The rest of the function
+#'   is still computed on the original data.
 #' @return A list with network tables and summary measures
 #' @export
 R2_network <- function(data,
                        directed = TRUE,
                        amat = FALSE,
-                       dag_method = c("lingam","notears")) {
+                       dag_method = c("lingam","notears"),
+                       standardize_for_dag = FALSE) {
 
   dag_method <- match.arg(dag_method)
 
@@ -31,15 +35,25 @@ R2_network <- function(data,
   # ------------------------------------------------------------
   if ((is.logical(amat) && !amat) && directed) {
 
-    X <- as.matrix(data)
+    X_raw <- as.matrix(data)
 
     if (dag_method == "lingam") {
 
-      fit_lingam <- pcalg::lingam(X, verbose = FALSE)
+      if (standardize_for_dag) {
+        X_dag <- scale(X_raw)
+      } else {
+        X_dag <- X_raw
+      }
 
-      Bm <- if (!is.null(fit_lingam$Bpruned)) fit_lingam$Bpruned
-      else if (!is.null(fit_lingam$B)) fit_lingam$B
-      else stop("No 'B' or 'Bpruned' found in pcalg::lingam output.")
+      fit_lingam <- pcalg::lingam(X_dag, verbose = FALSE)
+
+      Bm <- if (!is.null(fit_lingam$Bpruned)) {
+        fit_lingam$Bpruned
+      } else if (!is.null(fit_lingam$B)) {
+        fit_lingam$B
+      } else {
+        stop("No 'B' or 'Bpruned' found in pcalg::lingam output.")
+      }
 
       A <- matrix(0L, p, p)
       A[abs(Bm) > 1e-4] <- 1L
@@ -47,13 +61,13 @@ R2_network <- function(data,
 
     } else if (dag_method == "notears") {
 
-      # run NOTEARS
-      W_hat <- gnlearn::notears(X)
+      # NOTEARS input stays on the original data
+      W_hat <- gnlearn::notears(X_raw)
 
       # convert list -> matrix
       W <- matrix(0, p, p)
 
-      for(i in seq_along(W_hat)){
+      for (i in seq_along(W_hat)) {
         W[i, ] <- W_hat[i]
       }
 
@@ -141,18 +155,18 @@ R2_network <- function(data,
   npdc_total <- Total - t(Total)
 
   list(
-    direct_table   = Direct,
-    indirect_table = Indirect,
-    total_table    = Total,
-    to_total       = to_total,
-    from_total     = from_total,
-    net_total      = net_total,
-    tci_direct     = tci_direct,
-    tci_indirect   = tci_indirect,
-    tci_total      = tci_total,
-    npdc_total     = npdc_total,
-    amat           = amat,
-    Bstd           = Bstd,
-    corr_Y         = corr_Y
+    direct_table        = Direct,
+    indirect_table      = Indirect,
+    total_table         = Total,
+    to_total            = to_total,
+    from_total          = from_total,
+    net_total           = net_total,
+    tci_direct          = tci_direct,
+    tci_indirect        = tci_indirect,
+    tci_total           = tci_total,
+    npdc_total          = npdc_total,
+    amat                = amat,
+    Bstd                = Bstd,
+    corr_Y              = corr_Y
   )
 }
