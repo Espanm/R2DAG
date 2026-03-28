@@ -1,90 +1,297 @@
-#' Theoretical values of the R2 network
+#' Theoretical values of the R2 network under multiple methodologies
 #'
 #' @param A0 Structural matrix (p x p)
+#' @param sigma_eps Structural shock standard deviations
 #' @param var_names Variable names
-#' @param directed logical
+#' @param method One of:
+#'   "directed"            = DAG-based total/direct/indirect methodology
+#'   "undirected_genizi"   = undirected Genizi decomposition
+#'   "model_free"          = squared correlations normalized rowwise to 1
 #' @return A list with theoretical network tables and measures
 #' @export
 theoretical_R2_network <- function(A0,
                                    sigma_eps = rep(1, nrow(A0)),
                                    var_names = paste0("X", 1:nrow(A0)),
-                                   directed = TRUE) {
+                                   method = c("directed",
+                                              "undirected_genizi",
+                                              "model_free")) {
 
+  method <- match.arg(method)
   p <- nrow(A0)
+
   stopifnot(
     is.matrix(A0),
     ncol(A0) == p,
     length(sigma_eps) == p
   )
 
-  # --- invert A0 ---
-  A0_inv <- tryCatch(solve(A0), error = function(e) NULL)
-  if (is.null(A0_inv)) stop("`A0` is singular and cannot be inverted.")
+  # ============================================================
+  # helpers
+  # ============================================================
 
-  # --- structural shock covariance ---
-  Sigma_eps <- diag(sigma_eps^2)
+  .sym_sqrt <- function(M, tol = 1e-10) {
+    ee <- eigen(M, symmetric = TRUE)
+    vals <- pmax(ee$values, tol)
+    ee$vectors %*% diag(sqrt(vals)) %*% t(ee$vectors)
+  }
 
-  # --- implied covariance & correlation of Y ---
-  cov_Y  <- A0_inv %*% Sigma_eps %*% t(A0_inv)
-  corr_Y <- stats::cov2cor(cov_Y)
+  .sym_inv_sqrt <- function(M, tol = 1e-10) {
+    ee <- eigen(M, symmetric = TRUE)
+    vals <- pmax(ee$values, tol)
+    ee$vectors %*% diag(1 / sqrt(vals)) %*% t(ee$vectors)
+  }
 
-  # --- adjacency matrix ---
-  if (directed) {
-    amat <- matrix(0L, p, p)
-    for (i in seq_len(p)) {
-      for (j in seq_len(p)) {
-        if (i != j && A0[i, j] != 0) amat[i, j] <- 1L
+  .genizi_from_corr <- function(Rxx, rxy, pred_names = NULL, tol = 1e-10) {
+
+    k <- length(rxy)
+
+    if (is.null(pred_names)) {
+      pred_names <- paste0("X", seq_len(k))
+    }
+
+    out <- rep(0, k)
+    names(out) <- pred_names
+
+    if (k == 0) return(out)
+
+    if (k == 1) {
+      out[1] <- as.numeric(rxy)^2
+      return(out)
+    }
+
+    Rxx <- (Rxx + t(Rxx)) / 2
+    diag(Rxx) <- 1
+
+    P_half <- .sym_sqrt(Rxx, tol)
+    P_inv_half <- .sym_inv_sqrt(Rxx, tol)
+
+    z <- as.vector(P_inv_half %*% matrix(rxy, ncol = 1))
+    G <- P_half %*% diag(z)
+    gij <- rowSums(G^2)
+
+    gij[abs(gij) < tol] <- 0
+    out[] <- gij
+    out
+  }
+
+  .get_ancestors <- function(A, node) {
+    anc <- integer(0)
+    frontier <- which(A[node, ] != 0)
+
+    while (length(frontier) > 0) {
+      new_nodes <- setdiff(frontier, anc)
+      if (length(new_nodes) == 0) break
+      anc <- union(anc, new_nodes)
+
+      parents_of_new <- integer(0)
+      for (v in new_nodes) {
+        parents_of_new <- union(parents_of_new, which(A[v, ] != 0))
+      }
+      frontier <- setdiff(parents_of_new, anc)
+    }
+
+    sort(unique(anc))
+  }
+
+  .all_directed_paths <- function(A, from, to) {
+    children_list <- lapply(seq_len(nrow(A)), function(j) which(A[, j] != 0))
+    paths <- list()
+
+    dfs <- function(current, target, visited, path) {
+      if (current == target) {
+        paths[[length(paths) + 1]] <<- path
+        return()
+      }
+      nxt <- setdiff(children_list[[current]], visited)
+      for (v in nxt) {
+        dfs(v, target, c(visited, v), c(path, v))
       }
     }
-  } else {
-    amat <- matrix(1L, p, p)
-    diag(amat) <- 0L
+
+    dfs(from, to, from, from)
+    paths
   }
+
+  .path_product_B <- function(path, B) {
+    out <- 1
+    for (h in seq_len(length(path) - 1)) {
+      out <- out * B[path[h + 1], path[h]]
+    }
+    out
+  }
+
+  # ============================================================
+  # covariance + correlation
+  # ============================================================
+
+  A0_inv <- solve(A0)
+  Sigma_eps <- diag(sigma_eps^2)
+
+  cov_Y  <- A0_inv %*% Sigma_eps %*% t(A0_inv)
+  corr_Y <- cov2cor(cov_Y)
+
+  colnames(corr_Y) <- rownames(corr_Y) <- var_names
+  vars_raw <- diag(cov_Y)
+
+  # ============================================================
+  # adjacency
+  # ============================================================
+
+  if (method == "directed") {
+    amat <- (abs(A0) > 0) * 1
+    diag(amat) <- 0
+  } else {
+    amat <- matrix(1, p, p)
+    diag(amat) <- 0
+  }
+
   colnames(amat) <- rownames(amat) <- var_names
 
-  # --- Direct Genizi R2 ---
-  Direct <- matrix(0, p, p, dimnames = list(var_names, var_names))
-  for (i in seq_len(p)) {
-    Direct[i, ] <- .direct_row_genizi_fast(i, corr_Y, amat)
+  # ============================================================
+  # METHOD 1: DIRECTED (new methodology)
+  # ============================================================
+
+  if (method == "directed") {
+
+    Bstd <- compute_standardized_betas(corr_Y, amat)
+    Bstd[amat == 0] <- 0
+    diag(Bstd) <- 0
+
+    Total <- matrix(0, p, p, dimnames = list(var_names, var_names))
+
+    for (i in seq_len(p)) {
+      anc_idx <- .get_ancestors(amat, i)
+      if (length(anc_idx) == 0) next
+
+      Rxx <- corr_Y[anc_idx, anc_idx, drop = FALSE]
+      rxy <- corr_Y[anc_idx, i]
+
+      gij <- .genizi_from_corr(Rxx, rxy, var_names[anc_idx])
+      Total[i, names(gij)] <- gij
+    }
+
+    diag(Total) <- 0
+
+    q_direct   <- matrix(0, p, p)
+    q_indirect <- matrix(0, p, p)
+
+    for (j in seq_len(p)) {
+      for (i in seq_len(p)) {
+        if (i == j) next
+
+        if (amat[i, j] != 0) {
+          q_direct[i, j] <- (Bstd[i, j]^2) * (vars_raw[j] / vars_raw[i])
+        }
+
+        paths <- .all_directed_paths(amat, j, i)
+
+        for (pth in paths) {
+          if (length(pth) >= 3) {
+            prod <- .path_product_B(pth, Bstd)
+            q_indirect[i, j] <- q_indirect[i, j] +
+              (prod^2) * (vars_raw[j] / vars_raw[i])
+          }
+        }
+      }
+    }
+
+    Direct   <- matrix(0, p, p)
+    Indirect <- matrix(0, p, p)
+
+    for (i in seq_len(p)) {
+      for (j in seq_len(p)) {
+
+        gtot <- Total[i, j]
+        qtot <- q_direct[i, j] + q_indirect[i, j]
+
+        if (gtot > 0 && qtot > 0) {
+          Direct[i, j]   <- gtot * q_direct[i, j] / qtot
+          Indirect[i, j] <- gtot * q_indirect[i, j] / qtot
+        }
+      }
+    }
+
+    row_R2_total <- rowSums(Total)
+
+    tci_direct   <- sum(rowSums(Direct))   / (p - 1)
+    tci_indirect <- sum(rowSums(Indirect)) / (p - 1)
+    tci_total    <- sum(row_R2_total)      / (p - 1)
   }
 
-  # --- Indirect effects: only if directed=TRUE ---
-  if (directed) {
-    Bstd <- compute_standardized_betas(corr_Y, amat) 
+  # ============================================================
+  # METHOD 2: UNDIRECTED GENIZI
+  # ============================================================
 
-    Indirect <- .indirect_from_powers_abs(Bstd) / 2
-    colnames(Indirect) <- rownames(Indirect) <- var_names
-    Direct <- Direct / 2
+  if (method == "undirected_genizi") {
 
-    Total <- Direct + Indirect
-
-    row_R2_direct   <- rowSums(Direct)
-    row_R2_indirect <- rowSums(Indirect)
-    row_R2_total    <- rowSums(Total)
-
-    tci_direct   <- sum(row_R2_direct)   / (p - 1)
-    tci_indirect <- sum(row_R2_indirect) / (p - 1)
-    tci_total    <- sum(row_R2_total)    / (p - 1)
-  } else {
     Bstd <- NULL
     Indirect <- NULL
-    Total <- Direct
 
-    row_R2_direct <- NULL
-    row_R2_total  <- rowSums(Total)
+    Total <- matrix(0, p, p, dimnames = list(var_names, var_names))
+
+    for (i in seq_len(p)) {
+      idx <- setdiff(seq_len(p), i)
+
+      Rxx <- corr_Y[idx, idx, drop = FALSE]
+      rxy <- corr_Y[idx, i]
+
+      gij <- .genizi_from_corr(Rxx, rxy, var_names[idx])
+      Total[i, names(gij)] <- gij
+    }
+
+    diag(Total) <- 0
+
+    Direct <- Total
+
+    row_R2_total <- rowSums(Total)
 
     tci_direct   <- NULL
     tci_indirect <- NULL
-    tci_total    <- sum(row_R2_total)  / p
+    tci_total    <- sum(row_R2_total) / p
   }
 
-  # --- Aggregate measures (based on Total) ---
+  # ============================================================
+  # METHOD 3: MODEL-FREE
+  # ============================================================
+
+  if (method == "model_free") {
+
+    Bstd <- NULL
+    Indirect <- NULL
+
+    Total <- matrix(0, p, p, dimnames = list(var_names, var_names))
+
+    for (i in seq_len(p)) {
+
+      row_vals <- corr_Y[i, ]^2
+      row_vals[i] <- 0
+
+      s <- sum(row_vals)
+
+      if (s > 0) {
+        Total[i, ] <- row_vals / s
+      }
+    }
+
+    diag(Total) <- 0
+
+    Direct <- Total
+
+    row_R2_total <- rowSums(Total)
+
+    tci_direct   <- NULL
+    tci_indirect <- NULL
+    tci_total    <- sum(row_R2_total) / p
+  }
+
+  # ============================================================
+  # common outputs
+  # ============================================================
+
   to_total   <- colSums(Total)
   from_total <- rowSums(Total)
   net_total  <- to_total - from_total
   npdc_total <- Total - t(Total)
-
-  mult <- max(rowSums(Total))
 
   list(
     direct_table   = Direct,
@@ -100,7 +307,6 @@ theoretical_R2_network <- function(A0,
     amat           = amat,
     Bstd           = Bstd,
     corr_Y         = corr_Y,
-    cov_Y          = cov_Y,
-    sigma_eps      = sigma_eps
+    cov_Y          = cov_Y
   )
 }
