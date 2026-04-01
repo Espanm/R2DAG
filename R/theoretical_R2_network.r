@@ -1,12 +1,12 @@
-#' Theoretical values of the R2 network under multiple methodologies
+#' Theoretical values of the R2/DY network under multiple methodologies
 #'
 #' @param A0 Structural matrix (p x p)
 #' @param sigma_eps Structural shock standard deviations
 #' @param var_names Variable names
 #' @param method One of:
-#'   "directed"            = DAG-based total/direct/indirect methodology
-#'   "undirected_genizi"   = undirected Genizi decomposition
-#'   "model_free"          = squared correlations normalized rowwise to 1
+#'   "directed"          = DAG-based total/direct/indirect methodology
+#'   "undirected_genizi" = undirected Genizi decomposition
+#'   "dy"                = theoretical Diebold-Yilmaz network under VAR(0)
 #' @return A list with theoretical network tables and measures
 #' @export
 theoretical_R2_network <- function(A0,
@@ -14,7 +14,7 @@ theoretical_R2_network <- function(A0,
                                    var_names = paste0("X", 1:nrow(A0)),
                                    method = c("directed",
                                               "undirected_genizi",
-                                              "model_free")) {
+                                              "dy")) {
 
   method <- match.arg(method)
   p <- nrow(A0)
@@ -131,6 +131,8 @@ theoretical_R2_network <- function(A0,
   corr_Y <- cov2cor(cov_Y)
 
   colnames(corr_Y) <- rownames(corr_Y) <- var_names
+  colnames(cov_Y)  <- rownames(cov_Y)  <- var_names
+
   vars_raw <- diag(cov_Y)
 
   # ============================================================
@@ -172,8 +174,8 @@ theoretical_R2_network <- function(A0,
 
     diag(Total) <- 0
 
-    q_direct   <- matrix(0, p, p)
-    q_indirect <- matrix(0, p, p)
+    q_direct   <- matrix(0, p, p, dimnames = list(var_names, var_names))
+    q_indirect <- matrix(0, p, p, dimnames = list(var_names, var_names))
 
     for (j in seq_len(p)) {
       for (i in seq_len(p)) {
@@ -195,8 +197,8 @@ theoretical_R2_network <- function(A0,
       }
     }
 
-    Direct   <- matrix(0, p, p)
-    Indirect <- matrix(0, p, p)
+    Direct   <- matrix(0, p, p, dimnames = list(var_names, var_names))
+    Indirect <- matrix(0, p, p, dimnames = list(var_names, var_names))
 
     for (i in seq_len(p)) {
       for (j in seq_len(p)) {
@@ -251,28 +253,37 @@ theoretical_R2_network <- function(A0,
   }
 
   # ============================================================
-  # METHOD 3: MODEL-FREE
+  # METHOD 3: DY under VAR(0)
+  # generalized FEVD, row-normalized
   # ============================================================
 
-  if (method == "model_free") {
+  if (method == "dy") {
 
     Bstd <- NULL
     Indirect <- NULL
 
-    Total <- matrix(0, p, p, dimnames = list(var_names, var_names))
+    sigma_diag <- diag(cov_Y)
+
+    theta_raw <- matrix(0, p, p, dimnames = list(var_names, var_names))
 
     for (i in seq_len(p)) {
-
-      row_vals <- corr_Y[i, ]^2
-      row_vals[i] <- 0
-
-      s <- sum(row_vals)
-
-      if (s > 0) {
-        Total[i, ] <- row_vals / s
+      for (j in seq_len(p)) {
+        theta_raw[i, j] <- (cov_Y[i, j]^2) / (sigma_diag[i] * sigma_diag[j])
       }
     }
 
+    theta_norm <- theta_raw
+
+    for (i in seq_len(p)) {
+      s <- sum(theta_raw[i, ])
+      if (s > 0) {
+        theta_norm[i, ] <- theta_raw[i, ] / s
+      } else {
+        theta_norm[i, ] <- 0
+      }
+    }
+
+    Total <- theta_norm
     diag(Total) <- 0
 
     Direct <- Total
