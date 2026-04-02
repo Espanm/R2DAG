@@ -284,7 +284,6 @@ theoretical_R2_network <- function(A0,
     }
 
     Total <- theta_norm
-    diag(Total) <- 0
 
     Direct <- Total
 

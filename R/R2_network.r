@@ -3,17 +3,19 @@
 #' @param data data.frame or matrix with column names
 #' @param directed logical
 #' @param amat FALSE or adjacency matrix (child x parent)
-#' @param dag_method "lingam" or "notears"
+#' @param dag_method "lingam", "notears", or "direct_lingam"
 #' @param standardize_for_dag logical; if TRUE, variables are standardized
-#'   columnwise before DAG learning with LiNGAM. The rest of the function
+#'   columnwise before DAG learning. The rest of the function
 #'   uses the original data scale.
+#' @param mag integer seed used where relevant
 #' @return A list with network tables and summary measures
 #' @export
 R2_network <- function(data,
                        directed = TRUE,
                        amat = FALSE,
-                       dag_method = c("lingam","notears"),
-                       standardize_for_dag = FALSE) {
+                       dag_method = c("lingam", "notears", "direct_lingam"),
+                       standardize_for_dag = FALSE,
+                       mag = 123) {
 
   dag_method <- match.arg(dag_method)
 
@@ -150,9 +152,11 @@ R2_network <- function(data,
   # ============================================================
   if ((is.logical(amat) && !amat) && directed) {
 
+    X_dag <- if (standardize_for_dag) scale(X_raw) else X_raw
+
     if (dag_method == "lingam") {
 
-      X_dag <- if (standardize_for_dag) scale(X_raw) else X_raw
+      set.seed(mag)
       fit_lingam <- pcalg::lingam(X_dag, verbose = FALSE)
 
       Bm <- if (!is.null(fit_lingam$Bpruned)) {
@@ -167,9 +171,56 @@ R2_network <- function(data,
       A[abs(Bm) > 1e-4] <- 1L
       diag(A) <- 0L
 
+    } else if (dag_method == "direct_lingam") {
+
+      if (!requireNamespace("reticulate", quietly = TRUE)) {
+        stop("Package 'reticulate' is required for dag_method = 'direct_lingam'.")
+      }
+
+      lingam_available <- reticulate::py_module_available("lingam")
+
+      if (!lingam_available) {
+        message("Python package 'lingam' not found.")
+        message("Installing now... this may take a few minutes.")
+        reticulate::py_install("lingam")
+        message("Installation finished. Continuing with DirectLiNGAM...")
+      }
+
+      lingam_py <- tryCatch(
+        reticulate::import("lingam", delay_load = FALSE),
+        error = function(e) {
+          stop(
+            "Could not import Python package 'lingam' even after installation attempt. ",
+            "Original error: ", conditionMessage(e)
+          )
+        }
+      )
+
+      if (reticulate::py_module_available("numpy")) {
+        np <- reticulate::import("numpy", delay_load = FALSE)
+        np$random$seed(as.integer(mag))
+      }
+
+      model <- lingam_py$DirectLiNGAM()
+      model$fit(X_dag)
+
+      Bm <- reticulate::py_to_r(model$adjacency_matrix_)
+      Bm <- as.matrix(Bm)
+
+      if (!all(dim(Bm) == c(p, p))) {
+        stop("DirectLiNGAM returned an adjacency matrix with unexpected dimensions.")
+      }
+
+      colnames(Bm) <- rownames(Bm) <- var_names
+
+      A <- matrix(0L, p, p)
+      A[abs(Bm) > 1e-4] <- 1L
+      diag(A) <- 0L
+      colnames(A) <- rownames(A) <- var_names
+
     } else if (dag_method == "notears") {
 
-      W_hat <- gnlearn::notears(X_raw)
+      W_hat <- gnlearn::notears(X_dag)
 
       W <- matrix(0, p, p)
       for (i in seq_along(W_hat)) {
@@ -259,12 +310,10 @@ R2_network <- function(data,
       for (i in seq_len(p)) {
         if (i == j) next
 
-        # direct intensity
         if (amat[i, j] != 0) {
           q_direct[i, j] <- (Bstd[i, j]^2) * (vars_raw[j] / vars_raw[i])
         }
 
-        # indirect intensity = sum over all directed paths of length >= 2
         paths_ji <- .all_directed_paths(amat, from = j, to = i)
 
         if (length(paths_ji) > 0) {
