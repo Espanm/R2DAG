@@ -170,49 +170,33 @@ R2_network <- function(data,
       A <- matrix(0L, p, p)
       A[abs(Bm) > 1e-4] <- 1L
       diag(A) <- 0L
+      colnames(A) <- rownames(A) <- var_names
 
     } else if (dag_method == "direct_lingam") {
 
-      if (!requireNamespace("reticulate", quietly = TRUE)) {
-        stop("Package 'reticulate' is required for dag_method = 'direct_lingam'.")
+      if (!requireNamespace("rlingam", quietly = TRUE)) {
+        stop(
+          "Package 'rlingam' is required for dag_method = 'direct_lingam'. ",
+          "Install it with remotes::install_github('gkikuchi/rlingam')."
+        )
       }
 
-      lingam_available <- reticulate::py_module_available("lingam")
+      X_dag_df <- as.data.frame(X_dag)
+      colnames(X_dag_df) <- var_names
 
-      if (!lingam_available) {
-        message("Python package 'lingam' not found.")
-        message("Installing now... this may take a few minutes.")
-        reticulate::py_install("lingam")
-        message("Installation finished. Continuing with DirectLiNGAM...")
-      }
+      mdl <- rlingam::DirectLiNGAM$new(random_state = as.integer(mag))
+      mdl$fit(X_dag_df)
 
-      lingam_py <- tryCatch(
-        reticulate::import("lingam", delay_load = FALSE),
-        error = function(e) {
-          stop(
-            "Could not import Python package 'lingam' even after installation attempt. ",
-            "Original error: ", conditionMessage(e)
-          )
-        }
-      )
-
-      if (reticulate::py_module_available("numpy")) {
-        np <- reticulate::import("numpy", delay_load = FALSE)
-        np$random$seed(as.integer(mag))
-      }
-
-      model <- lingam_py$DirectLiNGAM()
-      model$fit(X_dag)
-
-      Bm <- reticulate::py_to_r(model$adjacency_matrix_)
+      Bm <- mdl$adjacency_matrix
       Bm <- as.matrix(Bm)
 
       if (!all(dim(Bm) == c(p, p))) {
-        stop("DirectLiNGAM returned an adjacency matrix with unexpected dimensions.")
+        stop("rlingam::DirectLiNGAM returned an adjacency matrix with unexpected dimensions.")
       }
 
       colnames(Bm) <- rownames(Bm) <- var_names
 
+      # rlingam adjacency_matrix is already target x predictor = child x parent
       A <- matrix(0L, p, p)
       A[abs(Bm) > 1e-4] <- 1L
       diag(A) <- 0L
@@ -232,9 +216,9 @@ R2_network <- function(data,
       A[abs(W) > 1e-4] <- 1L
       diag(A) <- 0L
       A <- t(A)  # child x parent
+      colnames(A) <- rownames(A) <- var_names
     }
 
-    colnames(A) <- rownames(A) <- var_names
     amat <- A
   }
 
