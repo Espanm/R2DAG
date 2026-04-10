@@ -88,21 +88,194 @@ compute_standardized_betas <- function(corr_Y, amat) {
   Bstd
 }
 
-# =========================
-# LiNGAM -> adjacency matrix
-# =========================
-data2amat <- function(data) {
-  # pcalg is in Imports, so it is available when the package loads
-  lingam_model <- pcalg::lingam(as.matrix(data), verbose = FALSE)
+# ============================================================
+# Matrix helpers
+# ============================================================
 
-  coefs <- as.matrix(lingam_model$Bpruned)
-  amat <- ifelse(coefs != 0, 1L, 0L)
-  diag(amat) <- 0L
+sym_sqrt <- function(M, tol = 1e-10) {
+  ee <- eigen(M, symmetric = TRUE)
+  vals <- pmax(ee$values, tol)
+  ee$vectors %*% diag(sqrt(vals), length(vals)) %*% t(ee$vectors)
+}
 
-  list(
-    lingam = lingam_model,
-    amat = amat
-  )
+sym_inv_sqrt <- function(M, tol = 1e-10) {
+  ee <- eigen(M, symmetric = TRUE)
+  vals <- pmax(ee$values, tol)
+  ee$vectors %*% diag(1 / sqrt(vals), length(vals)) %*% t(ee$vectors)
+}
+
+# ============================================================
+# Genizi decomposition from a predictor set
+# ============================================================
+
+genizi_from_predictors <- function(y, X, tol = 1e-10) {
+  k <- ncol(X)
+  out <- rep(0, k)
+  names(out) <- colnames(X)
+
+  if (k == 0) return(out)
+
+  sdy <- stats::sd(y)
+  sdx <- apply(X, 2, stats::sd)
+
+  keep <- is.finite(sdx) & (sdx > tol)
+  if (!is.finite(sdy) || sdy <= tol || !any(keep)) return(out)
+
+  Xk <- X[, keep, drop = FALSE]
+  keep_names <- colnames(Xk)
+
+  Rxx <- stats::cor(Xk, use = "pairwise.complete.obs")
+  rxy <- stats::cor(Xk, y, use = "pairwise.complete.obs")
+
+  if (is.null(dim(Rxx))) {
+    out[keep_names] <- as.numeric(rxy)^2
+    return(out)
+  }
+
+  Rxx <- (Rxx + t(Rxx)) / 2
+  diag(Rxx) <- 1
+
+  P_half <- sym_sqrt(Rxx, tol = tol)
+  P_inv_half <- sym_inv_sqrt(Rxx, tol = tol)
+
+  z <- as.vector(P_inv_half %*% matrix(rxy, ncol = 1))
+  G <- P_half %*% diag(z, nrow = length(z))
+  gij <- rowSums(G^2)
+  gij[abs(gij) < tol] <- 0
+
+  out[keep_names] <- gij
+  out
+}
+
+# ============================================================
+# Graph helpers
+# ============================================================
+
+get_ancestors <- function(A, node) {
+  # A is child x parent
+  anc <- integer(0)
+  frontier <- which(A[node, ] != 0)
+
+  while (length(frontier) > 0) {
+    new_nodes <- setdiff(frontier, anc)
+    if (length(new_nodes) == 0) break
+
+    anc <- union(anc, new_nodes)
+
+    parents_of_new <- integer(0)
+    for (v in new_nodes) {
+      parents_of_new <- union(parents_of_new, which(A[v, ] != 0))
+    }
+
+    frontier <- setdiff(parents_of_new, anc)
+  }
+
+  sort(unique(anc))
+}
+
+all_directed_paths <- function(A, from, to) {
+  # A is child x parent, so edges are parent -> child
+  children_list <- lapply(seq_len(nrow(A)), function(j) which(A[, j] != 0))
+  paths <- list()
+
+  dfs <- function(current, target, visited, path) {
+    if (current == target) {
+      paths[[length(paths) + 1]] <<- path
+      return(NULL)
+    }
+
+    nxt <- children_list[[current]]
+    nxt <- setdiff(nxt, visited)
+
+    if (length(nxt) == 0) return(NULL)
+
+    for (v in nxt) {
+      dfs(v, target, c(visited, v), c(path, v))
+    }
+
+    NULL
+  }
+
+  dfs(from, to, visited = from, path = from)
+  paths
+}
+
+path_product_B <- function(path, B) {
+  if (length(path) < 2) return(0)
+
+  out <- 1
+  for (h in seq_len(length(path) - 1)) {
+    parent <- path[h]
+    child  <- path[h + 1]
+    out <- out * B[child, parent]
+  }
+
+  out
+}
+
+# ============================================================
+# DAG estimation
+# ============================================================
+
+estimate_amat <- function(data,
+                          dag_method = c("lingam", "notears"),
+                          standardize = FALSE,
+                          threshold = 1e-15) {
+
+  dag_method <- match.arg(dag_method)
+
+  stopifnot(is.data.frame(data) || is.matrix(data))
+  data <- as.data.frame(data)
+  stopifnot(!is.null(colnames(data)))
+
+  X_raw <- as.matrix(data)
+  X_dag <- if (standardize) scale(X_raw) else X_raw
+
+  p <- ncol(X_raw)
+  var_names <- colnames(X_raw)
+
+  if (dag_method == "lingam") {
+    set.seed(1119)
+    fit_lingam <- pcalg::lingam(X_dag, verbose = FALSE)
+
+    Bm <- if (!is.null(fit_lingam$Bpruned)) {
+      fit_lingam$Bpruned
+    } else if (!is.null(fit_lingam$B)) {
+      fit_lingam$B
+    } else {
+      stop("No 'B' or 'Bpruned' found in pcalg::lingam output.")
+    }
+
+    A <- matrix(0L, p, p)
+    A[abs(Bm) > threshold] <- 1L
+    diag(A) <- 0L
+
+  } else if (dag_method == "notears") {
+
+    W_hat <- gnlearn::notears(X_dag)
+
+    if (is.matrix(W_hat)) {
+      W <- W_hat
+    } else if (is.list(W_hat) && !is.null(W_hat$W)) {
+      W <- as.matrix(W_hat$W)
+    } else if (is.list(W_hat)) {
+      W <- do.call(rbind, lapply(W_hat, as.numeric))
+    } else {
+      stop("Unsupported output format returned by gnlearn::notears().")
+    }
+
+    if (!all(dim(W) == c(p, p))) {
+      stop("gnlearn::notears() returned an object with unexpected dimensions.")
+    }
+
+    A <- matrix(0L, p, p)
+    A[abs(W) > threshold] <- 1L
+    diag(A) <- 0L
+    A <- t(A)  # convert to child x parent
+  }
+
+  colnames(A) <- rownames(A) <- var_names
+  A
 }
 
 # =========================
@@ -179,3 +352,4 @@ bootstrap_lingam <- function(data, B = 100) {
     frequencies = as.numeric(tab) / B
   )
 }
+

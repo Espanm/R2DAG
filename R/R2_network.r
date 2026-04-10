@@ -3,19 +3,17 @@
 #' @param data data.frame or matrix with column names
 #' @param directed logical
 #' @param amat FALSE or adjacency matrix (child x parent)
-#' @param dag_method "lingam", "notears", or "direct_lingam"
+#' @param dag_method "lingam" or "notears"
 #' @param standardize_for_dag logical; if TRUE, variables are standardized
 #'   columnwise before DAG learning. The rest of the function
 #'   uses the original data scale.
-#' @param mag integer seed used where relevant
 #' @return A list with network tables and summary measures
 #' @export
 R2_network <- function(data,
                        directed = TRUE,
                        amat = FALSE,
-                       dag_method = c("lingam", "notears", "direct_lingam"),
-                       standardize_for_dag = FALSE,
-                       mag = 123) {
+                       dag_method = c("lingam", "notears"),
+                       standardize_for_dag = FALSE) {
 
   dag_method <- match.arg(dag_method)
 
@@ -29,204 +27,34 @@ R2_network <- function(data,
   X_raw <- as.matrix(data)
 
   # ============================================================
-  # helpers
-  # ============================================================
-
-  .sym_sqrt <- function(M, tol = 1e-10) {
-    ee <- eigen(M, symmetric = TRUE)
-    vals <- pmax(ee$values, tol)
-    ee$vectors %*% diag(sqrt(vals), length(vals)) %*% t(ee$vectors)
-  }
-
-  .sym_inv_sqrt <- function(M, tol = 1e-10) {
-    ee <- eigen(M, symmetric = TRUE)
-    vals <- pmax(ee$values, tol)
-    ee$vectors %*% diag(1 / sqrt(vals), length(vals)) %*% t(ee$vectors)
-  }
-
-  .genizi_from_predictors <- function(y, X, tol = 1e-10) {
-    k <- ncol(X)
-    out <- rep(0, k)
-    names(out) <- colnames(X)
-
-    if (k == 0) return(out)
-
-    sdy <- stats::sd(y)
-    sdx <- apply(X, 2, stats::sd)
-
-    keep <- is.finite(sdx) & (sdx > tol)
-    if (!is.finite(sdy) || sdy <= tol || !any(keep)) return(out)
-
-    Xk <- X[, keep, drop = FALSE]
-    keep_names <- colnames(Xk)
-
-    Rxx <- stats::cor(Xk, use = "pairwise.complete.obs")
-    rxy <- stats::cor(Xk, y, use = "pairwise.complete.obs")
-
-    if (is.null(dim(Rxx))) {
-      out[keep_names] <- as.numeric(rxy)^2
-      return(out)
-    }
-
-    Rxx <- (Rxx + t(Rxx)) / 2
-    diag(Rxx) <- 1
-
-    P_half <- .sym_sqrt(Rxx, tol = tol)
-    P_inv_half <- .sym_inv_sqrt(Rxx, tol = tol)
-
-    z <- as.vector(P_inv_half %*% matrix(rxy, ncol = 1))
-    G <- P_half %*% diag(z, nrow = length(z))
-    gij <- rowSums(G^2)
-    gij[abs(gij) < tol] <- 0
-
-    out[keep_names] <- gij
-    out
-  }
-
-  .get_ancestors <- function(A, node) {
-    # A: child x parent
-    anc <- integer(0)
-    frontier <- which(A[node, ] != 0)
-
-    while (length(frontier) > 0) {
-      new_nodes <- setdiff(frontier, anc)
-      if (length(new_nodes) == 0) break
-      anc <- union(anc, new_nodes)
-
-      parents_of_new <- integer(0)
-      for (v in new_nodes) {
-        parents_of_new <- union(parents_of_new, which(A[v, ] != 0))
-      }
-      frontier <- setdiff(parents_of_new, anc)
-    }
-
-    sort(unique(anc))
-  }
-
-  .all_directed_paths <- function(A, from, to) {
-    # A: child x parent, so edges are parent -> child
-    children_list <- lapply(seq_len(nrow(A)), function(j) which(A[, j] != 0))
-    paths <- list()
-
-    dfs <- function(current, target, visited, path) {
-      if (current == target) {
-        paths[[length(paths) + 1]] <<- path
-        return(NULL)
-      }
-      nxt <- children_list[[current]]
-      nxt <- setdiff(nxt, visited)
-      if (length(nxt) == 0) return(NULL)
-      for (v in nxt) {
-        dfs(v, target, c(visited, v), c(path, v))
-      }
-      NULL
-    }
-
-    dfs(from, to, visited = from, path = from)
-    paths
-  }
-
-  .path_product_B <- function(path, B) {
-    if (length(path) < 2) return(0)
-    out <- 1
-    for (h in seq_len(length(path) - 1)) {
-      parent <- path[h]
-      child  <- path[h + 1]
-      out <- out * B[child, parent]
-    }
-    out
-  }
-
-  # ============================================================
   # 0) Undirected default
   # ============================================================
-  if (!directed && (is.logical(amat) && !amat)) {
-    A <- matrix(1L, p, p)
-    diag(A) <- 0L
-    colnames(A) <- rownames(A) <- var_names
-    amat <- A
+  if (!directed && is.logical(amat) && !amat) {
+    amat <- matrix(1L, p, p, dimnames = list(var_names, var_names))
+    diag(amat) <- 0L
   }
 
   # ============================================================
   # 1) Learn DAG if needed
   # ============================================================
-  if ((is.logical(amat) && !amat) && directed) {
-
-    X_dag <- if (standardize_for_dag) scale(X_raw) else X_raw
-
-    if (dag_method == "lingam") {
-
-      set.seed(mag)
-      fit_lingam <- pcalg::lingam(X_dag, verbose = FALSE)
-
-      Bm <- if (!is.null(fit_lingam$Bpruned)) {
-        fit_lingam$Bpruned
-      } else if (!is.null(fit_lingam$B)) {
-        fit_lingam$B
-      } else {
-        stop("No 'B' or 'Bpruned' found in pcalg::lingam output.")
-      }
-
-      A <- matrix(0L, p, p)
-      A[abs(Bm) > 1e-4] <- 1L
-      diag(A) <- 0L
-      colnames(A) <- rownames(A) <- var_names
-
-    } else if (dag_method == "direct_lingam") {
-
-      if (!requireNamespace("rlingam", quietly = TRUE)) {
-        stop(
-          "Package 'rlingam' is required for dag_method = 'direct_lingam'. ",
-          "Install it with remotes::install_github('gkikuchi/rlingam')."
-        )
-      }
-
-      X_dag_df <- as.data.frame(X_dag)
-      colnames(X_dag_df) <- var_names
-
-      mdl <- rlingam::DirectLiNGAM$new(random_state = as.integer(mag))
-      mdl$fit(X_dag_df)
-
-      Bm <- mdl$adjacency_matrix
-      Bm <- as.matrix(Bm)
-
-      if (!all(dim(Bm) == c(p, p))) {
-        stop("rlingam::DirectLiNGAM returned an adjacency matrix with unexpected dimensions.")
-      }
-
-      colnames(Bm) <- rownames(Bm) <- var_names
-
-      # rlingam adjacency_matrix is already target x predictor = child x parent
-      A <- matrix(0L, p, p)
-      A[abs(Bm) > 1e-4] <- 1L
-      diag(A) <- 0L
-      colnames(A) <- rownames(A) <- var_names
-
-    } else if (dag_method == "notears") {
-
-      W_hat <- gnlearn::notears(X_dag)
-
-      W <- matrix(0, p, p)
-      for (i in seq_along(W_hat)) {
-        W[i, ] <- W_hat[i]
-      }
-      W <- t(W)
-
-      A <- matrix(0L, p, p)
-      A[abs(W) > 1e-4] <- 1L
-      diag(A) <- 0L
-      A <- t(A)  # child x parent
-      colnames(A) <- rownames(A) <- var_names
-    }
-
-    amat <- A
+  if (directed && is.logical(amat) && !amat) {
+    amat <- estimate_amat(
+      data = X_raw,
+      dag_method = dag_method,
+      standardize = standardize_for_dag
+    )
   }
 
   if (is.logical(amat)) {
-    stop("Provide an adjacency matrix 'amat' or set directed=TRUE.")
+    stop("Provide an adjacency matrix 'amat' or set directed = TRUE.")
   }
 
   amat <- as.matrix(amat)
+
+  if (!all(dim(amat) == c(p, p))) {
+    stop("'amat' must have dimensions p x p, where p = ncol(data).")
+  }
+
   colnames(amat) <- rownames(amat) <- var_names
   diag(amat) <- 0
 
@@ -250,21 +78,20 @@ R2_network <- function(data,
   }
 
   # ============================================================
-  # 4) TOTAL table:
-  # target i is regressed only on its direct + indirect parents
+  # 4) TOTAL table
   # ============================================================
   Total <- matrix(0, p, p, dimnames = list(var_names, var_names))
 
   if (directed) {
     for (i in seq_len(p)) {
-      anc_idx <- .get_ancestors(amat, i)
+      anc_idx <- get_ancestors(amat, i)
 
       if (length(anc_idx) == 0) next
 
       y <- X_raw[, i]
       Xpred <- X_raw[, anc_idx, drop = FALSE]
 
-      gij <- .genizi_from_predictors(y, Xpred)
+      gij <- genizi_from_predictors(y, Xpred)
       Total[i, names(gij)] <- gij
     }
   } else {
@@ -272,7 +99,8 @@ R2_network <- function(data,
       pred_idx <- setdiff(seq_len(p), i)
       y <- X_raw[, i]
       Xpred <- X_raw[, pred_idx, drop = FALSE]
-      gij <- .genizi_from_predictors(y, Xpred)
+
+      gij <- genizi_from_predictors(y, Xpred)
       Total[i, pred_idx] <- gij
     }
   }
@@ -298,12 +126,12 @@ R2_network <- function(data,
           q_direct[i, j] <- (Bstd[i, j]^2) * (vars_raw[j] / vars_raw[i])
         }
 
-        paths_ji <- .all_directed_paths(amat, from = j, to = i)
+        paths_ji <- all_directed_paths(amat, from = j, to = i)
 
         if (length(paths_ji) > 0) {
           for (pth in paths_ji) {
             if (length(pth) >= 3) {
-              prod_path <- .path_product_B(pth, Bstd)
+              prod_path <- path_product_B(pth, Bstd)
               q_indirect[i, j] <- q_indirect[i, j] +
                 (prod_path^2) * (vars_raw[j] / vars_raw[i])
             }
