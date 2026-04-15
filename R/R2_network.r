@@ -7,7 +7,7 @@
 #' @param standardize_for_dag logical; if TRUE, variables are standardized
 #'   columnwise before DAG learning. The rest of the function
 #'   uses the original data scale.
-#' @return A list with network tables and summary measures
+#' @return A list with network tables, summary measures, and structural residuals
 #' @export
 R2_network <- function(data,
                        directed = TRUE,
@@ -25,6 +25,7 @@ R2_network <- function(data,
   p <- ncol(data)
   var_names <- colnames(data)
   X_raw <- as.matrix(data)
+  n <- nrow(X_raw)
 
   # ============================================================
   # 0) Undirected default
@@ -75,6 +76,54 @@ R2_network <- function(data,
     colnames(Bstd) <- rownames(Bstd) <- var_names
   } else {
     Bstd <- NULL
+  }
+
+  # ============================================================
+  # 3b) Raw-scale structural coefficients and residuals
+  # ============================================================
+  if (directed) {
+    Braw <- matrix(0, p, p, dimnames = list(var_names, var_names))
+    intercepts <- stats::setNames(numeric(p), var_names)
+
+    residual_mat <- matrix(
+      NA_real_,
+      nrow = n,
+      ncol = p,
+      dimnames = list(rownames(data), var_names)
+    )
+
+    for (i in seq_len(p)) {
+      parent_idx <- which(amat[i, ] != 0)
+      y <- X_raw[, i]
+
+      if (length(parent_idx) == 0) {
+        intercepts[i] <- mean(y)
+        residual_mat[, i] <- y - intercepts[i]
+      } else {
+        fit_df <- data.frame(y = y, X_raw[, parent_idx, drop = FALSE])
+        fit <- stats::lm(y ~ ., data = fit_df)
+
+        cf <- stats::coef(fit)
+        intercepts[i] <- unname(cf[1])
+        Braw[i, parent_idx] <- unname(cf[-1])
+
+        residual_mat[, i] <- stats::residuals(fit)
+      }
+    }
+
+    structural_residuals <- as.data.frame(residual_mat)
+
+    if (dag_method == "lingam") {
+      lingam_residuals <- structural_residuals
+    } else {
+      lingam_residuals <- NULL
+    }
+
+  } else {
+    Braw <- NULL
+    intercepts <- NULL
+    structural_residuals <- NULL
+    lingam_residuals <- NULL
   }
 
   # ============================================================
@@ -189,18 +238,22 @@ R2_network <- function(data,
   npdc_total <- Total - t(Total)
 
   list(
-    direct_table   = Direct,
-    indirect_table = Indirect,
-    total_table    = Total,
-    to_total       = to_total,
-    from_total     = from_total,
-    net_total      = net_total,
-    tci_direct     = tci_direct,
-    tci_indirect   = tci_indirect,
-    tci_total      = tci_total,
-    npdc_total     = npdc_total,
-    amat           = amat,
-    Bstd           = Bstd,
-    corr_Y         = corr_Y
+    direct_table         = Direct,
+    indirect_table       = Indirect,
+    total_table          = Total,
+    to_total             = to_total,
+    from_total           = from_total,
+    net_total            = net_total,
+    tci_direct           = tci_direct,
+    tci_indirect         = tci_indirect,
+    tci_total            = tci_total,
+    npdc_total           = npdc_total,
+    amat                 = amat,
+    Bstd                 = Bstd,
+    Braw                 = Braw,
+    intercepts           = intercepts,
+    corr_Y               = corr_Y,
+    structural_residuals = structural_residuals,
+    lingam_residuals     = lingam_residuals
   )
 }
