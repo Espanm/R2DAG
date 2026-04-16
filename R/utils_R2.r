@@ -235,8 +235,18 @@ estimate_amat <- function(data,
   var_names <- colnames(X_raw)
 
   if (dag_method == "lingam") {
+
+    had_seed <- exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
+    if (had_seed) old_seed <- get(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
+
     set.seed(1119)
     fit_lingam <- pcalg::lingam(X_dag, verbose = FALSE)
+
+    if (had_seed) {
+      assign(".Random.seed", old_seed, envir = .GlobalEnv)
+    } else if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) {
+      rm(".Random.seed", envir = .GlobalEnv)
+    }
 
     Bm <- if (!is.null(fit_lingam$Bpruned)) {
       fit_lingam$Bpruned
@@ -271,7 +281,7 @@ estimate_amat <- function(data,
     A <- matrix(0L, p, p)
     A[abs(W) > threshold] <- 1L
     diag(A) <- 0L
-    A <- t(A)  # convert to child x parent
+    A <- t(A)
   }
 
   colnames(A) <- rownames(A) <- var_names
