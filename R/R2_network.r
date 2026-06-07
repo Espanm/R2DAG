@@ -44,7 +44,7 @@ R2_network <- function(data,
       data = X_raw,
       dag_method = dag_method,
       standardize = standardize_for_dag,
-      seed = mag
+      mag = mag
     )
   }
 
