@@ -13,7 +13,8 @@ R2_network <- function(data,
                        directed = TRUE,
                        amat = FALSE,
                        dag_method = c("lingam", "notears"),
-                       standardize_for_dag = FALSE) {
+                       standardize_for_dag = FALSE,
+                       mag = 1) {
 
   dag_method <- match.arg(dag_method)
 
@@ -42,7 +43,8 @@ R2_network <- function(data,
     amat <- estimate_amat(
       data = X_raw,
       dag_method = dag_method,
-      standardize = standardize_for_dag
+      standardize = standardize_for_dag,
+      seed = mag
     )
   }
 

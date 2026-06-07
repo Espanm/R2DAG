@@ -220,7 +220,8 @@ path_product_B <- function(path, B) {
 estimate_amat <- function(data,
                           dag_method = c("lingam", "notears"),
                           standardize = FALSE,
-                          threshold = 1e-15) {
+                          threshold = 1e-15,
+                          mag = 1) {
 
   dag_method <- match.arg(dag_method)
 
@@ -239,7 +240,7 @@ estimate_amat <- function(data,
     had_seed <- exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
     if (had_seed) old_seed <- get(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
 
-    set.seed(1119)
+    set.seed(mag)
     fit_lingam <- pcalg::lingam(X_dag, verbose = FALSE)
 
     if (had_seed) {
